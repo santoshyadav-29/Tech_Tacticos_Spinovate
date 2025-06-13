@@ -272,8 +272,12 @@ def generate_frames(local=False):
                 cv2.putText(frame, f"Yaw: {yaw_angle:.1f}", (col2_x, table_y + row * row_height + 15),
                             cv2.FONT_HERSHEY_SIMPLEX, font_scale, metric_color, font_thickness)
                 row += 1
-                cv2.putText(frame, f"Brightness: {brightness:.1f}", (col2_x, table_y + row * row_height + 15),
-                            cv2.FONT_HERSHEY_SIMPLEX, font_scale, metric_color, font_thickness)
+                if brightness is not None:
+                    cv2.putText(frame, f"Brightness: {brightness:.1f}", (col2_x, table_y + row * row_height + 15),
+                                cv2.FONT_HERSHEY_SIMPLEX, font_scale, metric_color, font_thickness)
+                else:
+                    cv2.putText(frame, "Brightness: None", (col2_x, table_y + row * row_height + 15),
+                                cv2.FONT_HERSHEY_SIMPLEX, font_scale, metric_color, font_thickness)
 
                 # Draw eye line for pitch visualization (keep as before)
                 cv2.line(frame, (int(left_eye[0]), int(left_eye[1])),

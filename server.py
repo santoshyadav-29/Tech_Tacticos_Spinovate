@@ -1,134 +1,99 @@
-from fastapi import FastAPI
-from fastapi.responses import StreamingResponse, JSONResponse
 import cv2
 import mediapipe as mp
 import numpy as np
 import math
-import threading
 
-app = FastAPI()
-
-# MediaPipe modules
-mp_face_detection = mp.solutions.face_detection.FaceDetection(model_selection=1, min_detection_confidence=0.6)
+# Initialize MediaPipe Face Mesh
 mp_face_mesh = mp.solutions.face_mesh
-face_mesh = mp_face_mesh.FaceMesh(static_image_mode=False, max_num_faces=1, refine_landmarks=True)
+face_mesh = mp_face_mesh.FaceMesh(static_image_mode=False,
+                                  max_num_faces=1,
+                                  refine_landmarks=True,
+                                  min_detection_confidence=0.5,
+                                  min_tracking_confidence=0.5)
 
-# Capture source
-cap = cv2.VideoCapture("http://172.16.3.114:4747/video")  # Use 0 for webcam or replace with IP stream
+# Drawing utils
+mp_drawing = mp.solutions.drawing_utils
 
-# Calibration constants
-KNOWN_DISTANCE = 50.0   # cm
-REAL_WIDTH = 16.0       # cm (human head average)
-FOCAL_LENGTH = 650      # Adjusted focal length
+# Eye and mouth landmark indices for MediaPipe Face Mesh
+LEFT_EYE = [33, 160, 158, 133, 153, 144]
+RIGHT_EYE = [362, 385, 387, 263, 373, 380]
+MOUTH = [61, 81, 13, 311, 308, 402, 14, 178]
 
-# Shared variables
-latest_data = {"distance": None, "pitch": None}
-lock = threading.Lock()
+def euclidean(p1, p2):
+    return np.linalg.norm(np.array(p1) - np.array(p2))
 
-# Helper functions
-def vector_angle(v1, v2):
-    v1_u = v1 / np.linalg.norm(v1)
-    v2_u = v2 / np.linalg.norm(v2)
-    dot = np.dot(v1_u, v2_u)
-    angle = np.arccos(np.clip(dot, -1.0, 1.0))
-    return np.degrees(angle) - 90
+def aspect_ratio(landmarks, indices):
+    top = euclidean(landmarks[indices[1]], landmarks[indices[5]]) + euclidean(landmarks[indices[2]], landmarks[indices[4]])
+    bottom = 2 * euclidean(landmarks[indices[0]], landmarks[indices[3]])
+    return top / bottom if bottom != 0 else 0
 
-def to_3d(landmarks, idx, w, h):
-    pt = landmarks[idx]
-    return np.array([pt.x * w, pt.y * h, pt.z * w])
+# Thresholds
+EAR_THRESH = 0.25
+MAR_THRESH = 0.75
+EAR_CONSEC_FRAMES = 20
 
-def get_face_width_px(bbox, image_width):
-    return bbox.width * image_width
+# State counters
+eye_counter = 0
+yawn_counter = 0
 
-def generate_frames():
-    global latest_data
+# Start webcam
+cap = cv2.VideoCapture(0)
 
-    while True:
-        ret, frame = cap.read()
-        if not ret:
-            break
+while True:
+    ret, frame = cap.read()
+    if not ret:
+        break
+    h, w = frame.shape[:2]
+    rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+    result = face_mesh.process(rgb)
 
-        h, w = frame.shape[:2]
-        rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+    if result.multi_face_landmarks:
+        for face_landmarks in result.multi_face_landmarks:
+            landmarks = [(int(pt.x * w), int(pt.y * h)) for pt in face_landmarks.landmark]
 
-        # Process Face Detection
-        detection_results = mp_face_detection.process(rgb)
-        if detection_results.detections:
-            for detection in detection_results.detections:
-                bbox = detection.location_data.relative_bounding_box
-                face_width_px = get_face_width_px(bbox, w)
+            # EAR calculation
+            left_ear = aspect_ratio(landmarks, LEFT_EYE)
+            right_ear = aspect_ratio(landmarks, RIGHT_EYE)
+            ear = (left_ear + right_ear) / 2.0
 
-                if face_width_px > 0:
-                    distance = (FOCAL_LENGTH * REAL_WIDTH) / face_width_px
-                    with lock:
-                        latest_data["distance"] = round(distance, 2)
+            # MAR (mouth aspect ratio)
+            mar = aspect_ratio(landmarks, MOUTH)
 
-                    # Draw bounding box
-                    x1 = int(bbox.xmin * w)
-                    y1 = int(bbox.ymin * h)
-                    x2 = int((bbox.xmin + bbox.width) * w)
-                    y2 = int((bbox.ymin + bbox.height) * h)
-                    cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 255, 0), 2)
-                    cv2.putText(frame, f"Distance: {distance:.2f} cm", (x1, y1 - 10),
-                                cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 0), 2)
+            # Detect fatigue
+            if ear < EAR_THRESH:
+                eye_counter += 1
+            else:
+                eye_counter = 0
 
-        # Process Face Mesh for Pitch
-        mesh_results = face_mesh.process(rgb)
-        if mesh_results.multi_face_landmarks:
-            lm = mesh_results.multi_face_landmarks[0].landmark
+            if mar > MAR_THRESH:
+                yawn_counter += 1
+            else:
+                yawn_counter = 0
 
-            left_eye = to_3d(lm, 33, w, h)
-            right_eye = to_3d(lm, 263, w, h)
-            chin = to_3d(lm, 152, w, h)
+            if eye_counter >= EAR_CONSEC_FRAMES:
+                cv2.putText(frame, "DROWSINESS ALERT!", (10, 30),
+                            cv2.FONT_HERSHEY_SIMPLEX, 0.9, (0, 0, 255), 2)
 
-            eye_mid = (left_eye + right_eye) / 2
-            eye_vec = right_eye - left_eye
-            vertical_vec = chin - eye_mid
-            normal = np.cross(eye_vec, vertical_vec)
+            if yawn_counter > 15:
+                cv2.putText(frame, "YAWNING ALERT!", (10, 60),
+                            cv2.FONT_HERSHEY_SIMPLEX, 0.9, (0, 0, 255), 2)
 
-            ground_plane = np.array([0, -1, 0])
-            pitch_angle = vector_angle(normal, ground_plane)
-            with lock:
-                latest_data["pitch"] = round(pitch_angle, 2)
+            # Show EAR/MAR values
+            cv2.putText(frame, f"EAR: {ear:.2f}", (450, 30),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 1)
+            cv2.putText(frame, f"MAR: {mar:.2f}", (450, 60),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 1)
 
-            # Draw eye line
-            left_eye_2d = (int(left_eye[0]), int(left_eye[1]))
-            right_eye_2d = (int(right_eye[0]), int(right_eye[1]))
-            cv2.line(frame, left_eye_2d, right_eye_2d, (0, 255, 255), 2)
-            cv2.putText(frame, f"Pitch: {pitch_angle:.2f} deg", (30, 40),
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 0), 2)
+            # Optional: Draw facial landmarks
+            mp_drawing.draw_landmarks(
+                frame, face_landmarks, mp_face_mesh.FACEMESH_TESSELATION,
+                landmark_drawing_spec=None,
+                connection_drawing_spec=mp_drawing.DrawingSpec(color=(0, 255, 0), thickness=1, circle_radius=1)
+            )
 
-        # Show stream in window
-        cv2.imshow("Camera Feed", frame)
-        if cv2.waitKey(1) & 0xFF == ord('q'):
-            break
+    cv2.imshow("Fatigue Detection", frame)
+    if cv2.waitKey(1) & 0xFF == ord('q'):
+        break
 
-        # MJPEG frame streaming
-        _, buffer = cv2.imencode(".jpg", frame)
-        yield (b'--frame\r\n'
-               b'Content-Type: image/jpeg\r\n\r\n' + buffer.tobytes() + b'\r\n')
-
-@app.get("/video/")
-async def video_feed():
-    return StreamingResponse(generate_frames(), media_type="multipart/x-mixed-replace; boundary=frame")
-
-@app.get("/distance/")
-async def get_distance():
-    with lock:
-        return JSONResponse(content={
-            "distance": latest_data["distance"],
-            "pitch": latest_data["pitch"]
-        })
-
-if __name__ == "__main__":
-    import uvicorn
-    import threading
-
-    def run_server():
-        uvicorn.run(app, host="127.0.0.1", port=8000)
-
-    threading.Thread(target=run_server, daemon=True).start()
-    generate = generate_frames()
-    for _ in generate:
-        pass  # Keeps the OpenCV window open
-    cv2.destroyAllWindows()
+cap.release()
+cv2.destroyAllWindows()

@@ -3,7 +3,6 @@ from fastapi.responses import StreamingResponse, JSONResponse
 import cv2
 import mediapipe as mp
 import numpy as np
-import math
 import threading
 
 app = FastAPI()
@@ -14,7 +13,7 @@ mp_face_mesh = mp.solutions.face_mesh
 face_mesh = mp_face_mesh.FaceMesh(static_image_mode=False, max_num_faces=1, refine_landmarks=True)
 
 # Capture source
-cap = cv2.VideoCapture("http://172.16.3.114:4747/video")  # Use 0 for webcam or replace with IP stream
+cap = cv2.VideoCapture(0)  # Use 0 for webcam or replace with IP stream
 
 # Calibration constants
 KNOWN_DISTANCE = 50.0   # cm
@@ -40,7 +39,7 @@ def to_3d(landmarks, idx, w, h):
 def get_face_width_px(bbox, image_width):
     return bbox.width * image_width
 
-def generate_frames():
+def generate_frames(local=False):
     global latest_data
 
     while True:
@@ -99,18 +98,23 @@ def generate_frames():
                         cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 0), 2)
 
         # Show stream in window
-        cv2.imshow("Camera Feed", frame)
-        if cv2.waitKey(1) & 0xFF == ord('q'):
-            break
-
-        # MJPEG frame streaming
-        _, buffer = cv2.imencode(".jpg", frame)
-        yield (b'--frame\r\n'
-               b'Content-Type: image/jpeg\r\n\r\n' + buffer.tobytes() + b'\r\n')
+        if local:
+            cv2.imshow("Camera Feed", frame)
+            if cv2.waitKey(1) & 0xFF == ord('q'):
+                break
+        else:
+            # MJPEG frame streaming
+            _, buffer = cv2.imencode(".jpg", frame)
+            yield (b'--frame\r\n'
+                b'Content-Type: image/jpeg\r\n\r\n' + buffer.tobytes() + b'\r\n')
 
 @app.get("/video/")
 async def video_feed():
     return StreamingResponse(generate_frames(), media_type="multipart/x-mixed-replace; boundary=frame")
+
+@app.get("/run-local/")
+async def run_local():
+    return StreamingResponse(generate_frames(local=True), media_type="multipart/x-mixed-replace; boundary=frame")
 
 @app.get("/distance/")
 async def get_distance():
@@ -119,16 +123,3 @@ async def get_distance():
             "distance": latest_data["distance"],
             "pitch": latest_data["pitch"]
         })
-
-if __name__ == "__main__":
-    import uvicorn
-    import threading
-
-    def run_server():
-        uvicorn.run(app, host="127.0.0.1", port=8000)
-
-    threading.Thread(target=run_server, daemon=True).start()
-    generate = generate_frames()
-    for _ in generate:
-        pass  # Keeps the OpenCV window open
-    cv2.destroyAllWindows()

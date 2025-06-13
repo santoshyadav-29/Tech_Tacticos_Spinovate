@@ -1,7 +1,12 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  /* config options here */
+  images: {
+    domains: [
+      "images.unsplash.com",
+      "https://upload.wikimedia.org/wikipedia/commons/a/ab/Logo_TV_2015.png",
+    ],
+  },
 };
 
 export default nextConfig;

@@ -12,6 +12,7 @@ app = FastAPI()
 mp_face_detection = mp.solutions.face_detection.FaceDetection(model_selection=1, min_detection_confidence=0.6)
 mp_face_mesh = mp.solutions.face_mesh
 face_mesh = mp_face_mesh.FaceMesh(static_image_mode=False, max_num_faces=1, refine_landmarks=True)
+mp_drawing = mp.solutions.drawing_utils
 
 # Capture source
 cap = cv2.VideoCapture(0)  # Use 0 for webcam or replace with IP stream
@@ -22,7 +23,7 @@ REAL_WIDTH = 16.0       # cm (human head average)
 FOCAL_LENGTH = 650      # Adjusted focal length
 
 # Shared variables
-latest_data = {"distance": None, "pitch": None, "brightness": None}
+latest_data = {"distance": None, "pitch": None, "brightness": None, "ear": None, "mar": None, "yaw": None}
 monitoring_active = False
 monitoring_data = {}
 lock = threading.Lock()
@@ -34,7 +35,31 @@ BRIGHTNESS_HIGH_THRESHOLD = 140
 PITCH_BAD_POSTURE_THRESHOLD = 15
 VIDEO_FPS = 15
 
+# Constants for Fatigue Detection
+LEFT_EYE = [33, 160, 158, 133, 153, 144]
+RIGHT_EYE = [362, 385, 387, 263, 373, 380]
+MOUTH = [61, 81, 13, 311, 308, 402, 14, 178]
+
+EAR_THRESH = 0.25
+MAR_THRESH = 0.75
+MAR_THRESH_NON_FRONTAL = 0.9
+YAW_ANGLE_THRESH = 20  # degrees
+EAR_CONSEC_FRAMES = 25  # Require longer closure for drowsiness
+YAWN_CONSEC_FRAMES = 15  # Require longer open mouth for yawn
+
+# State counters for drowsiness detection
+eye_counter = 0
+yawn_counter = 0
+
 # Helper functions
+def euclidean(p1, p2):
+    return np.linalg.norm(np.array(p1) - np.array(p2))
+
+def aspect_ratio(landmarks, indices):
+    top = euclidean(landmarks[indices[1]], landmarks[indices[5]]) + euclidean(landmarks[indices[2]], landmarks[indices[4]])
+    bottom = 2 * euclidean(landmarks[indices[0]], landmarks[indices[3]])
+    return top / bottom if bottom != 0 else 0
+
 def vector_angle(v1, v2):
     v1_u = v1 / np.linalg.norm(v1)
     v2_u = v2 / np.linalg.norm(v2)
@@ -49,14 +74,8 @@ def to_3d(landmarks, idx, w, h):
 def get_face_width_px(bbox, image_width):
     return bbox.width * image_width
 
-import time
-
-# Add these globals at top of your file
-monitoring_active = False
-monitoring_data = {}
-
 def generate_frames(local=False):
-    global latest_data, monitoring_active, monitoring_data
+    global latest_data, monitoring_active, monitoring_data, eye_counter, yawn_counter
 
     frame_interval = 1.0 / VIDEO_FPS 
     while True:
@@ -70,6 +89,11 @@ def generate_frames(local=False):
         distance = None
         pitch_angle = None
         brightness = None
+        ear = None
+        mar = None
+        yaw_angle = None
+        drowsiness_detected = False
+        yawn_detected = False
 
         # --- Face Detection ---
         detection_results = mp_face_detection.process(rgb)
@@ -88,9 +112,9 @@ def generate_frames(local=False):
                     y1 = int(bbox.ymin * h)
                     x2 = int((bbox.xmin + bbox.width) * w)
                     y2 = int((bbox.ymin + bbox.height) * h)
-                    cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 255, 0), 2)
-                    cv2.putText(frame, f"Distance: {distance:.2f} cm", (x1, y1 - 10),
-                                cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 0), 2)
+                    cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 255, 0), 1)
+                    cv2.putText(frame, f"Distance: {distance:.2f} cm", (x1, y1 - 5),
+                                cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 1)
 
                     # Brightness estimation
                     face_roi = frame[y1:y2, x1:x2]
@@ -103,35 +127,157 @@ def generate_frames(local=False):
                         if brightness > BRIGHTNESS_HIGH_THRESHOLD:
                             cv2.putText(frame, f"⚠ Brightness Too High! ({brightness:.2f})", (30, 80),
                                         cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 0, 255), 2)
-                        else:
-                            cv2.putText(frame, f"Brightness OK ({brightness:.2f})", (30, 80),
-                                        cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 0), 2)
 
-        # --- Face Mesh (Pitch) ---
+        # --- Face Mesh (Pitch + Drowsiness Detection) ---
         mesh_results = face_mesh.process(rgb)
         if mesh_results.multi_face_landmarks:
-            lm = mesh_results.multi_face_landmarks[0].landmark
+            for face_landmarks in mesh_results.multi_face_landmarks:
+                lm = face_landmarks.landmark
+                
+                # Convert landmarks to pixel coordinates
+                landmarks_2d = [(int(pt.x * w), int(pt.y * h)) for pt in lm]
+                landmarks_3d = [(pt.x * w, pt.y * h, pt.z * w) for pt in lm]
 
-            left_eye = to_3d(lm, 33, w, h)
-            right_eye = to_3d(lm, 263, w, h)
-            chin = to_3d(lm, 152, w, h)
+                # --- Pitch Calculation ---
+                left_eye = to_3d(lm, 33, w, h)
+                right_eye = to_3d(lm, 263, w, h)
+                chin = to_3d(lm, 152, w, h)
 
-            eye_mid = (left_eye + right_eye) / 2
-            eye_vec = right_eye - left_eye
-            vertical_vec = chin - eye_mid
-            normal = np.cross(eye_vec, vertical_vec)
+                eye_mid = (left_eye + right_eye) / 2
+                eye_vec = right_eye - left_eye
+                vertical_vec = chin - eye_mid
+                normal = np.cross(eye_vec, vertical_vec)
 
-            ground_plane = np.array([0, -1, 0])
-            pitch_angle = vector_angle(normal, ground_plane)
+                ground_plane = np.array([0, -1, 0])
+                pitch_angle = vector_angle(normal, ground_plane)
 
-            with lock:
-                latest_data["pitch"] = round(pitch_angle, 2)
+                with lock:
+                    latest_data["pitch"] = round(pitch_angle, 2)
 
-            # Draw eye line
-            cv2.line(frame, (int(left_eye[0]), int(left_eye[1])),
-                     (int(right_eye[0]), int(right_eye[1])), (0, 255, 255), 2)
-            cv2.putText(frame, f"Pitch: {pitch_angle:.2f} deg", (30, 40),
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 0), 2)
+                # --- Drowsiness Detection ---
+                # EAR calculation
+                left_ear = aspect_ratio(landmarks_2d, LEFT_EYE)
+                right_ear = aspect_ratio(landmarks_2d, RIGHT_EYE)
+                ear = (left_ear + right_ear) / 2.0
+
+                # MAR calculation
+                mar = aspect_ratio(landmarks_2d, MOUTH)
+
+                # Yaw estimation using 3D landmarks
+                left_eye_outer_3d = np.array(landmarks_3d[LEFT_EYE[0]])
+                right_eye_outer_3d = np.array(landmarks_3d[RIGHT_EYE[3]])
+                eye_vector = right_eye_outer_3d - left_eye_outer_3d
+                yaw_angle_rad = np.arctan2(eye_vector[2], eye_vector[0])
+                yaw_angle = np.degrees(yaw_angle_rad)
+                is_frontal = abs(yaw_angle) < YAW_ANGLE_THRESH
+
+                # Update shared data
+                with lock:
+                    latest_data["ear"] = round(ear, 2)
+                    latest_data["mar"] = round(mar, 2)
+                    latest_data["yaw"] = round(yaw_angle, 2)
+
+                # Detect fatigue (robust logic)
+                if ear > 0 and ear < EAR_THRESH:
+                    eye_counter += 1
+                else:
+                    eye_counter = 0
+
+                # Yawn detection: allow in non-frontal, but require higher MAR
+                if (is_frontal and mar > MAR_THRESH) or (not is_frontal and mar > MAR_THRESH_NON_FRONTAL):
+                    yawn_counter += 1
+                else:
+                    yawn_counter = 0
+
+                # Check for alerts
+                alert_y = 30  # Start y position for alerts
+                alert_gap = 35  # Vertical gap between alerts
+                font_scale = 0.7
+                font_thickness = 2
+                alert_color = (0, 0, 255)
+
+                if eye_counter >= EAR_CONSEC_FRAMES:
+                    drowsiness_detected = True
+                    cv2.putText(frame, "DROWSINESS ALERT!", (10, alert_y),
+                                cv2.FONT_HERSHEY_SIMPLEX, font_scale, alert_color, font_thickness)
+                    alert_y += alert_gap
+
+                if yawn_counter >= YAWN_CONSEC_FRAMES:
+                    yawn_detected = True
+                    cv2.putText(frame, "YAWNING ALERT!", (10, alert_y),
+                                cv2.FONT_HERSHEY_SIMPLEX, font_scale, alert_color, font_thickness)
+                    alert_y += alert_gap
+
+                # Move table to bottom right corner, make it semi-transparent, and reduce size
+                table_width = 300
+                table_height = 5 * 20 + 18
+                table_x = w - table_width - 20
+                table_y = h - table_height - 20
+                row_height = 20
+                col1_x = table_x + 8
+                col2_x = table_x + 140
+                font_scale = 0.42
+                font_thickness = 1
+                alert_color = (0, 0, 255)
+                ok_color = (0, 200, 0)
+                metric_color = (255, 255, 255)
+                label_color = (200, 200, 0)
+
+                # Draw semi-transparent table background
+                overlay = frame.copy()
+                cv2.rectangle(overlay, (table_x, table_y), (table_x + table_width, table_y + table_height), (30, 30, 30), -1)
+                cv2.rectangle(overlay, (table_x, table_y), (table_x + table_width, table_y + table_height), (80, 80, 80), 1)
+                alpha = 0.5
+                frame = cv2.addWeighted(overlay, alpha, frame, 1 - alpha, 0)
+
+                # Table headers
+                cv2.putText(frame, "ALERTS", (col1_x, table_y + 15), cv2.FONT_HERSHEY_SIMPLEX, font_scale + 0.07, label_color, font_thickness + 1)
+                cv2.putText(frame, "METRICS", (col2_x, table_y + 15), cv2.FONT_HERSHEY_SIMPLEX, font_scale + 0.07, label_color, font_thickness + 1)
+
+                # Alerts
+                row = 1
+                if eye_counter >= EAR_CONSEC_FRAMES:
+                    cv2.putText(frame, "DROWSINESS ALERT!", (col1_x, table_y + row * row_height + 15),
+                                cv2.FONT_HERSHEY_SIMPLEX, font_scale, alert_color, font_thickness + 1)
+                else:
+                    cv2.putText(frame, "Drowsiness: OK", (col1_x, table_y + row * row_height + 15),
+                                cv2.FONT_HERSHEY_SIMPLEX, font_scale, ok_color, font_thickness)
+                row += 1
+                if yawn_counter >= YAWN_CONSEC_FRAMES:
+                    cv2.putText(frame, "YAWNING ALERT!", (col1_x, table_y + row * row_height + 15),
+                                cv2.FONT_HERSHEY_SIMPLEX, font_scale, alert_color, font_thickness + 1)
+                else:
+                    cv2.putText(frame, "Yawning: OK", (col1_x, table_y + row * row_height + 15),
+                                cv2.FONT_HERSHEY_SIMPLEX, font_scale, ok_color, font_thickness)
+                row += 1
+                if brightness is not None and brightness > BRIGHTNESS_HIGH_THRESHOLD:
+                    cv2.putText(frame, f"Brightness High! ({brightness:.1f})", (col1_x, table_y + row * row_height + 15),
+                                cv2.FONT_HERSHEY_SIMPLEX, font_scale, alert_color, font_thickness + 1)
+                else:
+                    cv2.putText(frame, f"Brightness: OK", (col1_x, table_y + row * row_height + 15),
+                                cv2.FONT_HERSHEY_SIMPLEX, font_scale, ok_color, font_thickness)
+                row += 1
+
+                # Metrics
+                row = 1
+                cv2.putText(frame, f"Pitch: {pitch_angle:.2f} deg", (col2_x, table_y + row * row_height + 15),
+                            cv2.FONT_HERSHEY_SIMPLEX, font_scale, metric_color, font_thickness)
+                row += 1
+                cv2.putText(frame, f"EAR: {ear:.2f}", (col2_x, table_y + row * row_height + 15),
+                            cv2.FONT_HERSHEY_SIMPLEX, font_scale, metric_color, font_thickness)
+                row += 1
+                cv2.putText(frame, f"MAR: {mar:.2f}", (col2_x, table_y + row * row_height + 15),
+                            cv2.FONT_HERSHEY_SIMPLEX, font_scale, metric_color, font_thickness)
+                row += 1
+                cv2.putText(frame, f"Yaw: {yaw_angle:.1f}", (col2_x, table_y + row * row_height + 15),
+                            cv2.FONT_HERSHEY_SIMPLEX, font_scale, metric_color, font_thickness)
+                row += 1
+                cv2.putText(frame, f"Brightness: {brightness:.1f}", (col2_x, table_y + row * row_height + 15),
+                            cv2.FONT_HERSHEY_SIMPLEX, font_scale, metric_color, font_thickness)
+
+                # Draw eye line for pitch visualization (keep as before)
+                cv2.line(frame, (int(left_eye[0]), int(left_eye[1])),
+                         (int(right_eye[0]), int(right_eye[1])), (0, 255, 255), 1)
 
         # --- Monitoring Logic ---
         if monitoring_active:
@@ -145,12 +291,12 @@ def generate_frames(local=False):
             if face_detected:
                 monitoring_data["frames_with_face"] += 1
 
-                # Distance
+                # Distance monitoring
                 monitoring_data["distance_sum"] += distance
                 if GOOD_DISTANCE_MIN <= distance <= GOOD_DISTANCE_MAX:
                     monitoring_data["good_distance_time"] += elapsed
 
-                # Brightness
+                # Brightness monitoring
                 if brightness is not None:
                     monitoring_data["brightness_sum"] += brightness
                     monitoring_data["max_brightness"] = max(brightness, monitoring_data["max_brightness"])
@@ -162,7 +308,7 @@ def generate_frames(local=False):
                     else:
                         monitoring_data["_brightness_state"] = False
 
-                # Pitch
+                # Pitch monitoring
                 if pitch_angle is not None:
                     monitoring_data["pitch_sum"] += abs(pitch_angle)
                     if abs(pitch_angle) > PITCH_BAD_POSTURE_THRESHOLD:
@@ -178,10 +324,27 @@ def generate_frames(local=False):
                             monitoring_data["current_good_posture_streak"]
                         )
                         monitoring_data["last_posture_good"] = True
-            else:
-                # No face
-                monitoring_data["face_missing_time"] += elapsed
 
+                # Drowsiness monitoring
+                if drowsiness_detected:
+                    monitoring_data["drowsiness_time"] += elapsed
+                    if not getattr(monitoring_data, "_drowsiness_state", False):
+                        monitoring_data["drowsiness_events"] += 1
+                        monitoring_data["_drowsiness_state"] = True
+                else:
+                    monitoring_data["_drowsiness_state"] = False
+
+                # Yawn monitoring
+                if yawn_detected:
+                    if not getattr(monitoring_data, "_yawn_state", False):
+                        monitoring_data["yawns_detected"] += 1
+                        monitoring_data["_yawn_state"] = True
+                else:
+                    monitoring_data["_yawn_state"] = False
+
+            else:
+                # No face detected
+                monitoring_data["face_missing_time"] += elapsed
 
         # --- Streaming or Local Display ---
         if local:
@@ -196,9 +359,9 @@ def generate_frames(local=False):
         # --- FPS limiting ---
         elapsed = time.time() - start_time
         sleep_time = frame_interval - elapsed
-        if sleep_time > 0:
+        # Only sleep if the frame processing was faster than the interval and the user is not in local mode
+        if sleep_time > 0 and not local:
             time.sleep(sleep_time)
-
 
 @app.get("/video/")
 async def video_feed():
@@ -214,17 +377,37 @@ async def get_distance():
         return JSONResponse(content={
             "distance": latest_data["distance"],
             "pitch": latest_data["pitch"],
-            "brightness": latest_data["brightness"]
+            "brightness": latest_data["brightness"],
+            "ear": latest_data["ear"],
+            "mar": latest_data["mar"],
+            "yaw": latest_data["yaw"]
         })
-    
+
+@app.get("/drowsiness-status/")
+async def get_drowsiness_status():
+    """Get current drowsiness detection status"""
+    with lock:
+        return JSONResponse(content={
+            "ear": latest_data["ear"],
+            "mar": latest_data["mar"],
+            "yaw": latest_data["yaw"],
+            "eye_counter": eye_counter,
+            "yawn_counter": yawn_counter,
+            "drowsiness_alert": eye_counter >= EAR_CONSEC_FRAMES,
+            "yawn_alert": yawn_counter >= YAWN_CONSEC_FRAMES
+        })
 
 # Monitoring Parts
 @app.post("/start-monitoring/")
 def start_monitoring():
-    global monitoring_active, monitoring_data
+    global monitoring_active, monitoring_data, eye_counter, yawn_counter
     if monitoring_active:
         return {"message": "Monitoring already started", "status": "already_started"}
+    
     monitoring_active = True
+    # Reset counters
+    eye_counter = 0
+    yawn_counter = 0
     
     monitoring_data = {
         "start_time": time.time(),
@@ -250,6 +433,11 @@ def start_monitoring():
 
         "face_missing_time": 0,
         "last_face_detected": time.time(),
+
+        # Drowsiness metrics
+        "drowsiness_time": 0,
+        "drowsiness_events": 0,
+        "yawns_detected": 0,
     }
 
     return {"message": "Monitoring started", "status": "started"}
@@ -273,10 +461,14 @@ def generate_report():
     avg_pitch = monitoring_data["pitch_sum"] / monitoring_data["frames_with_face"] if monitoring_data["frames_with_face"] else 0
     avg_brightness = monitoring_data["brightness_sum"] / monitoring_data["frames_with_face"] if monitoring_data["frames_with_face"] else 0
 
+    # Calculate session score
     score = 100
-    score -= (monitoring_data["bad_posture_time"] / duration) * 30
-    score -= (monitoring_data["high_brightness_time"] / duration) * 20
-    score -= (monitoring_data["face_missing_time"] / duration) * 10
+    score -= (monitoring_data["bad_posture_time"] / duration) * 30 if duration > 0 else 0
+    score -= (monitoring_data["high_brightness_time"] / duration) * 20 if duration > 0 else 0
+    score -= (monitoring_data["face_missing_time"] / duration) * 10 if duration > 0 else 0
+    score -= monitoring_data["yawns_detected"] * 5
+    score -= (monitoring_data["drowsiness_time"] / duration) * 25 if duration > 0 else 0
+    score -= monitoring_data["drowsiness_events"] * 3
     score = round(max(0, min(100, score)), 2)
 
     return {
@@ -293,5 +485,8 @@ def generate_report():
         "high_brightness_time_min": round(monitoring_data["high_brightness_time"] / 60, 2),
         "high_brightness_events": monitoring_data["high_brightness_events"],
         "face_missing_time_min": round(monitoring_data["face_missing_time"] / 60, 2),
+        "drowsiness_time_min": round(monitoring_data["drowsiness_time"] / 60, 2),
+        "drowsiness_events": monitoring_data["drowsiness_events"],
+        "yawns_detected": monitoring_data["yawns_detected"],
         "session_score": score
     }

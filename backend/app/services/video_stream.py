@@ -99,7 +99,12 @@ class VideoStreamService:
         data["brightness"] = brightness
         
         # Drowsiness detection and posture analysis
-        pitch, ear, mar, yaw, drowsiness, yawn, posture_angles = self.drowsiness_service.process_frame(rgb, frame)
+        pf_result = self.drowsiness_service.process_frame(rgb, frame)
+        if len(pf_result) == 7:
+            pitch, ear, mar, yaw, drowsiness, yawn, posture_angles = pf_result
+        else:
+            pitch, ear, mar, yaw, drowsiness, yawn = pf_result
+            posture_angles = None
         data.update({
             "pitch": pitch, "ear": ear, "mar": mar, "yaw": yaw,
             "drowsiness_detected": drowsiness, "yawn_detected": yawn

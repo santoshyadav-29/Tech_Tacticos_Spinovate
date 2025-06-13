@@ -8,6 +8,7 @@ from app.utils.calculations import (
     calculate_vector_angle, 
     landmarks_to_3d
 )
+from app.services.face_detection import FaceDetectionService
 
 class DrowsinessDetectionService:
     """Service for drowsiness and posture detection."""
@@ -24,6 +25,7 @@ class DrowsinessDetectionService:
             max_num_faces=1, 
             refine_landmarks=True
         )
+        self.face_detection_service = FaceDetectionService()
         self.eye_counter = 0
         self.yawn_counter = 0
     
@@ -63,10 +65,12 @@ class DrowsinessDetectionService:
             
             # Detect drowsiness and yawning
             drowsiness_detected, yawn_detected = self._detect_fatigue(ear, mar, yaw_angle)
+
+            distance, brightness = self.face_detection_service.detect_face_and_measure_distance(rgb_image, frame)
             
             # Draw visualizations
             self._draw_pitch_line(frame, lm, w, h)
-            self._draw_status_table(frame, pitch_angle, ear, mar, yaw_angle, 
+            self._draw_status_table(frame, pitch_angle, ear, mar, yaw_angle, brightness,
                                   drowsiness_detected, yawn_detected, w, h)
             
             return pitch_angle, ear, mar, yaw_angle, drowsiness_detected, yawn_detected
@@ -134,7 +138,7 @@ class DrowsinessDetectionService:
                 (int(right_eye[0]), int(right_eye[1])), (0, 255, 255), 1)
     
     def _draw_status_table(self, frame: np.ndarray, pitch: float, ear: float, 
-                          mar: float, yaw: float, drowsiness: bool, yawn: bool,
+                          mar: float, yaw: float, brightness: float, drowsiness: bool, yawn: bool,
                           w: int, h: int):
         """Draw status table on frame."""
         # Table configuration
@@ -193,7 +197,8 @@ class DrowsinessDetectionService:
             f"Pitch: {pitch:.2f} deg",
             f"EAR: {ear:.2f}",
             f"MAR: {mar:.2f}",
-            f"Yaw: {yaw:.1f}"
+            f"Yaw: {yaw:.1f}",
+            f"Brightness: {brightness:.2f}" if brightness is not None else "Brightness: N/A"
         ]
         
         for metric in metrics:

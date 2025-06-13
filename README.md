@@ -1,4 +1,4 @@
-##Spinovate: Posture Correction System
+## Spinovate: Posture Correction System
 
 ## 📌 Project Description
 

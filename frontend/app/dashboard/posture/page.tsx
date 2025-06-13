@@ -6,44 +6,44 @@ import Image from "next/image";
 // Generate random points along a "spine" path for demo/animation
 function generateSpinePoints(tilt = 0) {
   // tilt: -30 (left) to 30 (right)
-  const baseX = 130;
-  const baseY = 60;
-  const stepY = 60;
-  const stepX = 10 + tilt; // tilt controls the "lean"
+  const baseX = 150;
+  const baseY = 50;
+  const stepY = 70;
+  const stepX = 10 + tilt * 0.8; // tilt controls the "lean", reduced effect
   return [
-    { label: "C2_C7_vert", value: 21.7, x: baseX, y: baseY, color: "#ff4d4f" },
+    { label: "C2-C7", value: 21.7, x: baseX, y: baseY, color: "#ff4d4f" },
     {
-      label: "C7_T3_vert",
+      label: "T1-T4",
       value: 26.5,
-      x: baseX + stepX,
-      y: baseY + stepY,
+      x: baseX + stepX * 0.8, // Adjust x for curve
+      y: baseY + stepY * 1,
       color: "#ff4d4f",
     },
     {
-      label: "C7_T3_T8",
+      label: "T5-T8",
       value: 160.4,
-      x: baseX + stepX * 2,
+      x: baseX + stepX * 1.5, // Adjust x for curve
       y: baseY + stepY * 2,
       color: "#ff4d4f",
     },
     {
-      label: "T3_T8_T12",
+      label: "T9-T12",
       value: 153.4,
-      x: baseX + stepX * 3,
+      x: baseX + stepX * 2, // Adjust x for curve
       y: baseY + stepY * 3,
       color: "#ffb300",
     },
     {
-      label: "T8_T12_L3",
+      label: "L1-L3",
       value: 178.5,
-      x: baseX + stepX * 4,
+      x: baseX + stepX * 1.8, // Adjust x for curve
       y: baseY + stepY * 4,
       color: "#00b894",
     },
     {
-      label: "T12_L3_S",
+      label: "L4-S1",
       value: 170.3,
-      x: baseX + stepX * 5,
+      x: baseX + stepX * 1.5, // Adjust x for curve
       y: baseY + stepY * 5,
       color: "#00b894",
     },
@@ -54,15 +54,15 @@ const dummyResult = {
   score: 72,
   feedback: [
     "Neck angle is slightly forward.",
-    "Upper back is rounded.",
-    "Lower back alignment is good.",
+    "Upper back has a slight hunch.",
+    "Lower back alignment is generally good.",
   ],
 };
 
 const PosturePage = () => {
   const videoRef = useRef<HTMLVideoElement>(null);
   const [cameraOpen, setCameraOpen] = useState(false);
-  const [tilt, setTilt] = useState(0);
+  const [tilt, setTilt] = useState(0); // -30 to 30 for demo
   const [animating, setAnimating] = useState(false);
   const [error, setError] = useState<string>("");
 
@@ -90,6 +90,7 @@ const PosturePage = () => {
       if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
         throw new Error("Camera not supported by this browser");
       }
+
       const stream = await navigator.mediaDevices.getUserMedia({
         video: {
           width: { ideal: 640 },
@@ -101,11 +102,7 @@ const PosturePage = () => {
 
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
-        // Wait for metadata before playing and setting cameraOpen
-        videoRef.current.onloadedmetadata = () => {
-          videoRef.current?.play();
-          setCameraOpen(true);
-        };
+        setCameraOpen(true);
       }
     } catch (err) {
       console.error("Camera error:", err);
@@ -136,12 +133,12 @@ const PosturePage = () => {
   // Close webcam
   const handleCloseCamera = () => {
     setError("");
+    setCameraOpen(false);
     if (videoRef.current && videoRef.current.srcObject) {
       const stream = videoRef.current.srcObject as MediaStream;
       stream.getTracks().forEach((track) => track.stop());
       videoRef.current.srcObject = null;
     }
-    setCameraOpen(false);
   };
 
   // For demo, animate the posture line
@@ -149,6 +146,27 @@ const PosturePage = () => {
   const handleStopAnimation = () => setAnimating(false);
 
   const points = generateSpinePoints(tilt);
+
+  // Generate path data for the curved spine line
+  const pathData = points.reduce((acc, point, index, array) => {
+    if (index === 0) {
+      return `M${point.x},${point.y}`;
+    }
+    const prevPoint = array?.[index - 1];
+    if (!prevPoint) return acc;
+
+    const midX = (point.x + prevPoint.x) / 2;
+    const midY = (point.y + prevPoint.y) / 2;
+
+    // Basic curving logic using Cubic Bezier curves to create a smoother path
+    // These control points can be fine-tuned for a more precise curve
+    const controlX1 = prevPoint.x + (point.x - prevPoint.x) * 0.3;
+    const controlY1 = prevPoint.y;
+    const controlX2 = prevPoint.x + (point.x - prevPoint.x) * 0.7;
+    const controlY2 = point.y;
+
+    return `${acc} C${controlX1},${controlY1} ${controlX2},${controlY2} ${point.x},${point.y}`;
+  }, "");
 
   return (
     <div className="flex flex-col md:flex-row gap-8 p-6">
@@ -163,7 +181,7 @@ const PosturePage = () => {
             disabled={cameraOpen}
             className="px-6 py-2 bg-[#27a1ff] text-white rounded-lg font-semibold shadow hover:bg-[#0d3b66] transition disabled:opacity-50"
           >
-            Open Camera
+            {cameraOpen ? "Camera Active" : "Open Camera"}
           </button>
           <button
             onClick={handleCloseCamera}
@@ -173,25 +191,28 @@ const PosturePage = () => {
             Close Camera
           </button>
         </div>
+
+        {/* Error message */}
         {error && (
           <div className="w-full max-w-md mb-4 p-3 bg-red-100 border border-red-300 rounded-lg text-red-700 text-sm">
             {error}
           </div>
         )}
+
         <div className="w-full flex justify-center">
           <div className="relative w-[320px] h-[240px] bg-[#eaf3fb] rounded-lg overflow-hidden border border-[#b2b8d6]">
-            <video
-              ref={videoRef}
-              width={320}
-              height={240}
-              className="object-cover w-full h-full"
-              autoPlay
-              playsInline
-              muted
-              style={{ display: cameraOpen ? "block" : "none" }}
-            />
-            {!cameraOpen && (
-              <div className="flex items-center justify-center w-full h-full text-[#b2b8d6] absolute inset-0 bg-[#eaf3fb]">
+            {cameraOpen ? (
+              <video
+                ref={videoRef}
+                width={320}
+                height={240}
+                className="object-cover w-full h-full"
+                autoPlay
+                playsInline
+                muted
+              />
+            ) : (
+              <div className="flex items-center justify-center w-full h-full text-[#b2b8d6]">
                 Camera is off
               </div>
             )}
@@ -245,11 +266,11 @@ const PosturePage = () => {
           </span>
         </div>
         {/* Spine Visualization */}
-        <div className="relative w-[260px] h-[400px] mx-auto mb-6">
+        <div className="relative w-[300px] h-[450px] mx-auto mb-6">
           {/* Spine image */}
           <Image
-            width={180}
-            height={400}
+            width={220} // Increased width
+            height={450} // Increased height
             src="/spine.png"
             alt="Spine"
             className="absolute left-1/2 top-0 -translate-x-1/2 z-0 transition-transform duration-300"
@@ -260,20 +281,14 @@ const PosturePage = () => {
           />
           {/* Overlay lines and points */}
           <svg className="absolute left-0 top-0 w-full h-full z-10 pointer-events-none">
-            {/* Draw lines between points */}
-            {points.map((pt, idx) =>
-              idx < points.length - 1 ? (
-                <line
-                  key={idx}
-                  x1={points[idx].x}
-                  y1={points[idx].y}
-                  x2={points[idx + 1].x}
-                  y2={points[idx + 1].y}
-                  stroke="#27a1ff"
-                  strokeWidth="3"
-                  strokeDasharray="6 4"
-                />
-              ) : null
+            {/* Draw curved line between points */}
+            {points.length > 1 && (
+              <path
+                d={pathData}
+                stroke="#27a1ff" // Solid color
+                strokeWidth="4" // Thicker line
+                fill="transparent"
+              />
             )}
             {/* Draw points */}
             {points.map((pt, idx) => (
@@ -281,7 +296,7 @@ const PosturePage = () => {
                 key={pt.label}
                 cx={pt.x}
                 cy={pt.y}
-                r="10"
+                r="12" // Slightly larger points for visibility
                 fill={pt.color}
                 stroke="#fff"
                 strokeWidth="3"
@@ -291,10 +306,10 @@ const PosturePage = () => {
             {points.map((pt, idx) => (
               <text
                 key={pt.label + "_label"}
-                x={pt.x + 15}
-                y={pt.y}
+                x={pt.x + 20} // Adjust label position
+                y={pt.y + 5}
                 fill="#0d3b66"
-                fontSize="14"
+                fontSize="16" // Larger font size
                 fontWeight="bold"
                 alignmentBaseline="middle"
                 style={{ fontFamily: "Poppins, sans-serif" }}

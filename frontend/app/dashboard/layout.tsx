@@ -1,7 +1,7 @@
 // layout.tsx
 import React from "react";
 import Sidebar from "../../components/Sidebar";
-import Navbar from "@/components/Navbar";
+
 
 const DashboardLayout = ({ children }: { children: React.ReactNode }) => {
   return (

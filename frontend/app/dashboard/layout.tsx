@@ -1,12 +1,16 @@
 // layout.tsx
 import React from "react";
 import Sidebar from "../../components/Sidebar";
+import Navbar from "@/components/Navbar";
 
 const DashboardLayout = ({ children }: { children: React.ReactNode }) => {
   return (
-    <div style={{ display: "flex", minHeight: "100vh", background: "#f4faff" }}>
+    <div className="flex min-h-screen bg-[#f4faff]">
       <Sidebar />
-      <main style={{ marginLeft: 220, flex: 1, padding: 32 }}>{children}</main>
+      {/* Margin left matches sidebar width: w-20 (collapsed) and w-64 (expanded) */}
+      <main className="flex-1 ml-20 md:ml-64 p-8 transition-all duration-300">
+        {children}
+      </main>
     </div>
   );
 };

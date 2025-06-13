@@ -9,6 +9,7 @@ from app.utils.calculations import (
     landmarks_to_3d
 )
 from app.services.face_detection import FaceDetectionService
+from app.services.posture_angles import PostureAngles
 
 class DrowsinessDetectionService:
     """Service for drowsiness and posture detection."""
@@ -26,6 +27,7 @@ class DrowsinessDetectionService:
             refine_landmarks=True
         )
         self.face_detection_service = FaceDetectionService()
+        self.posture_angles = PostureAngles()
         self.eye_counter = 0
         self.yawn_counter = 0
     
@@ -33,7 +35,7 @@ class DrowsinessDetectionService:
         self, 
         rgb_image: np.ndarray, 
         frame: np.ndarray
-    ) -> Tuple[Optional[float], Optional[float], Optional[float], Optional[float], bool, bool]:
+    ) -> Tuple[Optional[float], Optional[float], Optional[float], Optional[float], bool, bool, Optional[dict]]:
         """
         Process frame for drowsiness detection and posture analysis.
         
@@ -67,13 +69,15 @@ class DrowsinessDetectionService:
             drowsiness_detected, yawn_detected = self._detect_fatigue(ear, mar, yaw_angle)
 
             distance, brightness = self.face_detection_service.detect_face_and_measure_distance(rgb_image, frame)
+
+            posture_angles = self.posture_angles.compute_posture_angles(distance, pitch_angle)
             
             # Draw visualizations
             self._draw_pitch_line(frame, lm, w, h)
             self._draw_status_table(frame, pitch_angle, ear, mar, yaw_angle, brightness,
-                                  drowsiness_detected, yawn_detected, w, h)
+                                  drowsiness_detected, yawn_detected, w, h, posture_angles)
             
-            return pitch_angle, ear, mar, yaw_angle, drowsiness_detected, yawn_detected
+            return pitch_angle, ear, mar, yaw_angle, drowsiness_detected, yawn_detected, posture_angles
             
         return None, None, None, None, False, False
     
@@ -139,16 +143,17 @@ class DrowsinessDetectionService:
     
     def _draw_status_table(self, frame: np.ndarray, pitch: float, ear: float, 
                           mar: float, yaw: float, brightness: float, drowsiness: bool, yawn: bool,
-                          w: int, h: int):
+                          w: int, h: int, posture_angles: dict):
         """Draw status table on frame."""
         # Table configuration
-        table_width = 300
-        table_height = 5 * 20 + 18
+        table_width = 600
+        table_height = 6 * 20 + 18
         table_x = w - table_width - 20
         table_y = h - table_height - 20
         row_height = 20
         col1_x = table_x + 8
         col2_x = table_x + 140
+        col3_x = table_x + 280
         font_scale = 0.42
         font_thickness = 1
         
@@ -173,6 +178,9 @@ class DrowsinessDetectionService:
                    cv2.FONT_HERSHEY_SIMPLEX, font_scale + 0.07, 
                    label_color, font_thickness + 1)
         cv2.putText(frame, "METRICS", (col2_x, table_y + 15), 
+                   cv2.FONT_HERSHEY_SIMPLEX, font_scale + 0.07, 
+                   label_color, font_thickness + 1)
+        cv2.putText(frame, "POSTURE", (col3_x, table_y + 15),
                    cv2.FONT_HERSHEY_SIMPLEX, font_scale + 0.07, 
                    label_color, font_thickness + 1)
         
@@ -204,6 +212,13 @@ class DrowsinessDetectionService:
         for metric in metrics:
             cv2.putText(frame, metric, (col2_x, table_y + row * row_height + 15),
                        cv2.FONT_HERSHEY_SIMPLEX, font_scale, metric_color, font_thickness)
+            row += 1
+        # Posture column
+        row = 1
+        for angle_name, angle_value in posture_angles.items():
+            cv2.putText(frame, f"{angle_name}: {angle_value:.2f} deg", 
+                       (col3_x, table_y + row * row_height + 15),
+                       cv2.FONT_HERSHEY_SIMPLEX, font_scale - 0.12, metric_color, font_thickness)
             row += 1
     
     def get_counters(self) -> Tuple[int, int]:

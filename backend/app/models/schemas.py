@@ -8,6 +8,7 @@ class FaceMetrics(BaseModel):
     ear: Optional[float] = None
     mar: Optional[float] = None
     yaw: Optional[float] = None
+    posture_angles: Optional[dict] = None
 
 class DrowsinessStatus(BaseModel):
     ear: Optional[float] = None

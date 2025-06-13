@@ -30,7 +30,7 @@ class Settings(BaseSettings):
     PITCH_BAD_POSTURE_THRESHOLD: int = 15
     
     # Fatigue detection
-    EAR_THRESH: float = 0.25
+    EAR_THRESH: float = 0.23
     MAR_THRESH: float = 0.75
     MAR_THRESH_NON_FRONTAL: float = 0.9
     YAW_ANGLE_THRESH: int = 20  # degrees

@@ -18,22 +18,30 @@ class VideoStreamService:
         self.monitoring_service = MonitoringService()
         self.latest_data: Dict[str, Any] = {
             "distance": None, "pitch": None, "brightness": None,
-            "ear": None, "mar": None, "yaw": None
+            "ear": None, "mar": None, "yaw": None, "posture_angles": None
         }
         self.lock = threading.Lock()
-        self._initialize_camera()
+        self.camera_initialized = False  # For lazy initialization
     
     def _initialize_camera(self):
         """Initialize camera capture."""
-        try:
-            self.cap = cv2.VideoCapture(settings.CAMERA_INDEX)
-            if not self.cap.isOpened():
-                raise CameraNotAvailableException()
-        except Exception:
+        if self.camera_initialized:
+            return
+        self.cap = cv2.VideoCapture(settings.CAMERA_INDEX)
+        if not self.cap.isOpened():
             raise CameraNotAvailableException()
+        self.camera_initialized = True
+    
+    def close_camera(self):
+        """Close the camera resource."""
+        if self.cap is not None:
+            self.cap.release()
+            self.cap = None
+            self.camera_initialized = False
     
     def generate_frames(self, local: bool = False) -> Generator[bytes, None, None]:
         """Generate video frames with computer vision processing."""
+        self._initialize_camera()
         frame_interval = 1.0 / settings.VIDEO_FPS
         
         while True:
@@ -91,7 +99,7 @@ class VideoStreamService:
         data["brightness"] = brightness
         
         # Drowsiness detection and posture analysis
-        pitch, ear, mar, yaw, drowsiness, yawn = self.drowsiness_service.process_frame(rgb, frame)
+        pitch, ear, mar, yaw, drowsiness, yawn, posture_angles = self.drowsiness_service.process_frame(rgb, frame)
         data.update({
             "pitch": pitch, "ear": ear, "mar": mar, "yaw": yaw,
             "drowsiness_detected": drowsiness, "yawn_detected": yawn
@@ -105,7 +113,8 @@ class VideoStreamService:
                 "brightness": round(brightness, 2) if brightness else None,
                 "ear": round(ear, 2) if ear else None,
                 "mar": round(mar, 2) if mar else None,
-                "yaw": round(yaw, 2) if yaw else None
+                "yaw": round(yaw, 2) if yaw else None,
+                "posture_angles": posture_angles if posture_angles else None
             })
         
         return data
@@ -146,6 +155,5 @@ class VideoStreamService:
     
     def cleanup(self):
         """Cleanup resources."""
-        if self.cap:
-            self.cap.release()
+        self.close_camera()
         cv2.destroyAllWindows()

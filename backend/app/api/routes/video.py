@@ -5,9 +5,11 @@ from app.models.schemas import FaceMetrics, DrowsinessStatus
 
 router = APIRouter()
 
-# Dependency to get video service
+# Create a single shared instance
+video_stream_service = VideoStreamService()
+
 def get_video_service() -> VideoStreamService:
-    return VideoStreamService()
+    return video_stream_service
 
 @router.get("/stream")
 async def video_feed(service: VideoStreamService = Depends(get_video_service)):
@@ -34,3 +36,9 @@ async def get_metrics(service: VideoStreamService = Depends(get_video_service)):
 async def get_drowsiness_status(service: VideoStreamService = Depends(get_video_service)):
     """Get current drowsiness detection status."""
     return DrowsinessStatus(**service.get_drowsiness_status())
+
+@router.post("/close_camera")
+async def close_camera(service: VideoStreamService = Depends(get_video_service)):
+    """Close the camera resource."""
+    service.close_camera()
+    return {"message": "Camera closed."}

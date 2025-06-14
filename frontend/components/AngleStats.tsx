@@ -1,12 +1,12 @@
 import React from "react";
 
 const healthyRanges: Record<string, [number, number]> = {
-  Cervical: [35, 1000],
-  T1Slope: [50, 1000],
-  UpperThoracic: [0, 140],
-  MidLowerThoracic: [156, 1000],
-  T8T12L3: [180, 1800],
-  LumbarLordosis: [174, 1900],
+  Cervical: [0, 35],
+  T1Slope: [0, 50],
+  UpperThoracic: [145, 158],
+  MidLowerThoracic: [153, 156],
+  T8T12L3: [175, 180.5],
+  LumbarLordosis: [170,174],
 };
 
 const vertebraKeys = [

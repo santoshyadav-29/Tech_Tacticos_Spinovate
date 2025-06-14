@@ -3,14 +3,12 @@ import React, { useEffect, useMemo, useState, useRef } from "react";
 import { usePostureDetection } from "@/app/hooks/usePostureDetection";
 import { VideoCapture } from "@/components/VideoCapture";
 import { AngleStats } from "@/components/AngleStats";
-
 import { computeAngles, getFeedback } from "@/app/utils/postureUtils";
 import {
   startMonitoring,
   stopCamera,
   stopMonitoring,
   useMonitoringReport,
-  PostureReportData,
 } from "@/app/hooks/monitoringReportSection";
 import { useRouter } from "next/navigation";
 
@@ -55,6 +53,51 @@ function showWindowNotification(title: string, body: string) {
   }
 }
 
+// Priority order and sound alert only for the first two
+const PRIORITY_ERRORS: {
+  key: keyof PostureStatus;
+  title: string;
+  body: string;
+  sound: boolean;
+}[] = [
+  {
+    key: "distance_too_close",
+    title: "Distance Too Close",
+    body: "You are sitting too close to the screen.",
+    sound: true,
+  },
+  {
+    key: "posture_angle_unhealthy",
+    title: "Unhealthy Posture Detected",
+    body: "Please correct your posture angle.",
+    sound: true,
+  },
+  {
+    key: "multiple_posture_angles_unhealthy",
+    title: "Multiple Angles Unhealthy",
+    body: "Multiple posture angles are unhealthy. Adjust your sitting position.",
+    sound: false,
+  },
+  {
+    key: "excessive_yawning",
+    title: "Excessive Yawning",
+    body: "You are yawning excessively. Consider taking a break.",
+    sound: false,
+  },
+  {
+    key: "yawn_and_drowsy",
+    title: "Yawning & Drowsiness",
+    body: "Yawning and drowsiness detected. Please stay alert.",
+    sound: false,
+  },
+  {
+    key: "insufficient_blinks",
+    title: "Insufficient Blinks",
+    body: "You are not blinking enough. Blink more to protect your eyes.",
+    sound: false,
+  },
+];
+
 export default function PosturePage() {
   const router = useRouter();
   const [isMonitoring, setIsMonitoring] = useState(() => {
@@ -64,13 +107,8 @@ export default function PosturePage() {
     return false;
   });
 
-  // Stack to track bad posture events (max size 3)
-  const [postureEventStack, setPostureEventStack] = useState<number[]>([]);
-  const lastBadPostureEvents = useRef<number>(0);
-
   // Use the monitoring report hook to fetch data
   const report = useMonitoringReport(isMonitoring, 2000);
-
   const { pitch, distance, postureAngles } = usePostureDetection(isMonitoring);
 
   const angleNameMap: Record<string, string> = {
@@ -102,83 +140,10 @@ export default function PosturePage() {
     [distance, pitch, angles]
   );
 
-  // Function to send window notification
-  const sendPostureNotification = () => {
-    if ("Notification" in window) {
-      if (Notification.permission === "granted") {
-        new Notification("Posture Alert! 🚨", {
-          body: "Three consecutive bad posture events detected. Please adjust your posture!",
-          icon: "/favicon.ico",
-          badge: "/favicon.ico",
-          tag: "posture-alert",
-          requireInteraction: true,
-        });
-
-        // Optional: Play notification sound
-        const audio = new Audio("/notification-sound.mp3");
-        audio.play().catch(() => {
-          // Fallback if audio fails
-          console.log("Audio notification failed");
-        });
-      } else if (Notification.permission !== "denied") {
-        Notification.requestPermission().then((permission) => {
-          if (permission === "granted") {
-            sendPostureNotification();
-          }
-        });
-      }
-    }
-  };
-
-  // Effect to track bad posture events and manage the stack
-  useEffect(() => {
-    if (report && report.bad_posture_events !== undefined) {
-      const currentBadEvents = report.bad_posture_events;
-
-      // Check if there's a new bad posture event
-      if (currentBadEvents > lastBadPostureEvents.current) {
-        const newEvents = currentBadEvents - lastBadPostureEvents.current;
-
-        setPostureEventStack((prevStack) => {
-          const updatedStack = [...prevStack];
-
-          // Add new events to the stack
-          for (let i = 0; i < newEvents; i++) {
-            updatedStack.push(Date.now());
-          }
-
-          // Keep only the last 3 events
-          const trimmedStack = updatedStack.slice(-3);
-
-          // Check if we have 3 consecutive events
-          if (trimmedStack.length === 3) {
-            sendPostureNotification();
-            // Clear the stack after notification
-            return [];
-          }
-
-          return trimmedStack;
-        });
-
-        lastBadPostureEvents.current = currentBadEvents;
-      }
-    }
-  }, [report?.bad_posture_events]);
-
-  // Request notification permission on component mount
-  useEffect(() => {
-    if ("Notification" in window && Notification.permission === "default") {
-      Notification.requestPermission();
-    }
-  }, []);
-
   const handleStartMonitoring = () => {
     startMonitoring();
     setIsMonitoring(true);
     localStorage.setItem("isMonitoring", "true");
-    // Reset tracking variables
-    setPostureEventStack([]);
-    lastBadPostureEvents.current = 0;
   };
 
   const handleEndSession = () => {
@@ -186,9 +151,6 @@ export default function PosturePage() {
     stopCamera();
     setIsMonitoring(false);
     localStorage.setItem("isMonitoring", "false");
-    // Reset tracking variables
-    setPostureEventStack([]);
-    lastBadPostureEvents.current = 0;
     router.push("/dashboard");
   };
 
@@ -201,9 +163,14 @@ export default function PosturePage() {
 
   // Posture alerts fetching
   const [data, setData] = useState<PostureStatus | null>(null);
-
-  // To avoid repeated notifications for the same alert
   const lastAlertRef = useRef<{ [key: string]: boolean }>({});
+
+  // Request notification permission on component mount
+  useEffect(() => {
+    if ("Notification" in window && Notification.permission === "default") {
+      Notification.requestPermission();
+    }
+  }, []);
 
   useEffect(() => {
     const interval = setInterval(() => {
@@ -219,52 +186,23 @@ export default function PosturePage() {
   useEffect(() => {
     if (!data) return;
 
-    // Helper to trigger notification and sound only on new alert
-    const triggerAlert = (
-      key: keyof PostureStatus,
-      title: string,
-      body: string
-    ) => {
-      if (data[key] && !lastAlertRef.current[key]) {
-        showWindowNotification(title, body);
-        playBeep(700, 0.5);
-        lastAlertRef.current[key] = true;
+    // Only alert for the highest priority error at a time
+    for (const err of PRIORITY_ERRORS) {
+      if (data[err.key]) {
+        if (!lastAlertRef.current[err.key]) {
+          showWindowNotification(err.title, err.body);
+          if (err.sound) playBeep(700, 0.5);
+          lastAlertRef.current[err.key] = true;
+        }
+        // Reset lower priority errors so they can be triggered next time
+        PRIORITY_ERRORS.forEach((e) => {
+          if (e.key !== err.key) lastAlertRef.current[e.key] = false;
+        });
+        break;
+      } else {
+        lastAlertRef.current[err.key] = false;
       }
-      if (!data[key]) {
-        lastAlertRef.current[key] = false;
-      }
-    };
-
-    triggerAlert(
-      "posture_angle_unhealthy",
-      "Unhealthy Posture Detected",
-      "Please correct your posture angle."
-    );
-    triggerAlert(
-      "multiple_posture_angles_unhealthy",
-      "Multiple Angles Unhealthy",
-      "Multiple posture angles are unhealthy. Adjust your sitting position."
-    );
-    triggerAlert(
-      "distance_too_close",
-      "Distance Too Close",
-      "You are sitting too close to the screen."
-    );
-    triggerAlert(
-      "excessive_yawning",
-      "Excessive Yawning",
-      "You are yawning excessively. Consider taking a break."
-    );
-    triggerAlert(
-      "yawn_and_drowsy",
-      "Yawning & Drowsiness",
-      "Yawning and drowsiness detected. Please stay alert."
-    );
-    triggerAlert(
-      "insufficient_blinks",
-      "Insufficient Blinks",
-      "You are not blinking enough. Blink more to protect your eyes."
-    );
+    }
   }, [data]);
 
   return (
@@ -274,22 +212,6 @@ export default function PosturePage() {
           Posture Analysis
         </h1>
         <div className="flex items-center gap-4">
-          {/* Notification Status Indicator */}
-          {isMonitoring && (
-            <div className="flex items-center gap-2 text-sm">
-              <div className="flex items-center gap-1">
-                <div className="w-2 h-2 bg-orange-500 rounded-full"></div>
-                <span className="text-gray-600">
-                  Events: {postureEventStack.length}/3
-                </span>
-              </div>
-              {report && (
-                <span className="text-gray-500">
-                  Total Bad Events: {report.bad_posture_events}
-                </span>
-              )}
-            </div>
-          )}
           <span className="text-gray-500 font-medium">
             Tech Tacticos Spinovate
           </span>
@@ -366,12 +288,6 @@ export default function PosturePage() {
                 <div className="w-2 h-2 bg-white rounded-full animate-pulse"></div>
                 LIVE
               </div>
-              {/* Posture Event Stack Indicator */}
-              {postureEventStack.length > 0 && (
-                <div className="absolute top-4 left-4 bg-orange-500 text-white px-3 py-1 rounded-full text-sm font-medium">
-                  ⚠️ {postureEventStack.length}/3
-                </div>
-              )}
             </div>
           ) : (
             <div className="flex items-center justify-center h-64 bg-gray-100 rounded-lg border-2 border-dashed border-gray-300">

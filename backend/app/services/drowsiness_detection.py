@@ -215,10 +215,29 @@ class DrowsinessDetectionService:
             row += 1
         # Posture column
         row = 1
+        healthy_ranges = {
+            "Degree of Anteversion of Cervical Spine (y1)": (25, 34),
+            "T1 Slope (y2)": (30, 50),
+            "Upper Thoracic Kyphosis Angle (y3)": (140, 158),
+            "Middle and Lower Thoracic Kyphosis Angle (y4)": (154, 155.5),
+            "T8-T12-L3 Angle (new)": (175, 180.3),
+            "Lumbar Lordosis Angle (y5)": (170, 174),
+        }
         for angle_name, angle_value in posture_angles.items():
-            cv2.putText(frame, f"{angle_name}: {angle_value:.2f} deg", 
-                       (col3_x, table_y + row * row_height + 15),
-                       cv2.FONT_HERSHEY_SIMPLEX, font_scale - 0.12, metric_color, font_thickness)
+            if angle_name in healthy_ranges:
+                low, high = healthy_ranges[angle_name]
+                color = (0, 200, 0) if low <= angle_value <= high else (0, 0, 255)
+            else:
+                color = metric_color
+            cv2.putText(
+                frame,
+                f"{angle_name}: {angle_value:.2f} deg",
+                (col3_x, table_y + row * row_height + 15),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                font_scale - 0.12,
+                color,
+                font_thickness,
+            )
             row += 1
     
     def get_counters(self) -> Tuple[int, int]:

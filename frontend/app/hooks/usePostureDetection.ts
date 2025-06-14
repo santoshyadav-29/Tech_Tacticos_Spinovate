@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import axios from "axios";
 
-export function usePostureDetection() {
+export function usePostureDetection(monitoring: boolean) {
   const [pitch, setPitch] = useState(0);
   const [distance, setDistance] = useState(0);
   const [postureAngles, setPostureAngles] = useState({
@@ -14,6 +14,7 @@ export function usePostureDetection() {
   });
 
   useEffect(() => {
+    if (!monitoring) return; // Do not start polling if monitoring is false
     const interval = setInterval(async () => {
       try {
         const res = await axios.get("http://127.0.0.1:8000/video/metrics");
@@ -23,7 +24,6 @@ export function usePostureDetection() {
         if (posture_angles && typeof posture_angles === "object") {
           setPostureAngles(posture_angles);
         } else {
-          // If posture_angles is null/undefined, reset to zeros
           setPostureAngles({
             "Degree of Anteversion of Cervical Spine (y1)": 0,
             "T1 Slope (y2)": 0,
@@ -35,7 +35,6 @@ export function usePostureDetection() {
         }
       } catch (err) {
         console.error("Backend error:", err);
-        // Optionally reset on error
         setPostureAngles({
           "Degree of Anteversion of Cervical Spine (y1)": 0,
           "T1 Slope (y2)": 0,
@@ -48,7 +47,7 @@ export function usePostureDetection() {
     }, 1000);
 
     return () => clearInterval(interval);
-  }, []);
+  }, [monitoring]);
 
   return { pitch, distance, postureAngles };
 }

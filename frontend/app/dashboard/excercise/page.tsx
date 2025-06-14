@@ -1,6 +1,7 @@
 "use client";
 import Image from "next/image";
 import React, { useState, useRef } from "react";
+import type { JSX } from "react";
 
 interface Exercise {
   id: number;

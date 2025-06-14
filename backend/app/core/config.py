@@ -21,7 +21,7 @@ class Settings(BaseSettings):
     # Distance measurement
     KNOWN_DISTANCE: float = 50.0  # cm
     REAL_WIDTH: float = 16.0      # cm (human head average)
-    FOCAL_LENGTH: int = 500       # Adjusted focal length
+    FOCAL_LENGTH: int = 550       # Adjusted focal length
     
     # Thresholds
     GOOD_DISTANCE_MIN: int = 40

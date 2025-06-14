@@ -1,27 +1,37 @@
 "use client";
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState, useRef } from "react";
 import { usePostureDetection } from "@/app/hooks/usePostureDetection";
 import { VideoCapture } from "@/components/VideoCapture";
 import { AngleStats } from "@/components/AngleStats";
-// import { StickFigure } from "@/components/StickFigure"; // if you modularize it
 
-import { computeAngles, getFeedback } from "@/app/utils/postureUtils"; // optional: extract these too
-import { startMonitoring, stopCamera, stopMonitoring } from "@/app/hooks/monitoringReportSection";
+import { computeAngles, getFeedback } from "@/app/utils/postureUtils";
+import {
+  startMonitoring,
+  stopCamera,
+  stopMonitoring,
+  useMonitoringReport,
+  PostureReportData,
+} from "@/app/hooks/monitoringReportSection";
 import { useRouter } from "next/navigation";
 
 export default function PosturePage() {
   const router = useRouter();
   const [isMonitoring, setIsMonitoring] = useState(() => {
-      if (typeof window !== "undefined") {
-        return localStorage.getItem("isMonitoring") === "true";
-      }
-      return false;
-    });
+    if (typeof window !== "undefined") {
+      return localStorage.getItem("isMonitoring") === "true";
+    }
+    return false;
+  });
 
-  // Use usePostureDetection only when isMonitoring is true
+  // Stack to track bad posture events (max size 3)
+  const [postureEventStack, setPostureEventStack] = useState<number[]>([]);
+  const lastBadPostureEvents = useRef<number>(0);
+
+  // Use the monitoring report hook to fetch data
+  const report = useMonitoringReport(isMonitoring, 2000);
+
   const { pitch, distance, postureAngles } = usePostureDetection(isMonitoring);
 
-  // Map backend keys to new display names, keeping values the same
   const angleNameMap: Record<string, string> = {
     "Degree of Anteversion of Cervical Spine (y1)": "Cervical",
     "T1 Slope (y2)": "T1Slope",
@@ -31,7 +41,6 @@ export default function PosturePage() {
     "Lumbar Lordosis Angle (y5)": "LumbarLordosis",
   };
 
-  // Remap postureAngles keys for display
   const remappedAngles = useMemo(() => {
     if (!postureAngles) return {};
     const out: Record<string, number> = {};
@@ -52,10 +61,83 @@ export default function PosturePage() {
     [distance, pitch, angles]
   );
 
+  // Function to send window notification
+  const sendPostureNotification = () => {
+    if ("Notification" in window) {
+      if (Notification.permission === "granted") {
+        new Notification("Posture Alert! 🚨", {
+          body: "Three consecutive bad posture events detected. Please adjust your posture!",
+          icon: "/favicon.ico",
+          badge: "/favicon.ico",
+          tag: "posture-alert",
+          requireInteraction: true,
+        });
+
+        // Optional: Play notification sound
+        const audio = new Audio("/notification-sound.mp3");
+        audio.play().catch(() => {
+          // Fallback if audio fails
+          console.log("Audio notification failed");
+        });
+      } else if (Notification.permission !== "denied") {
+        Notification.requestPermission().then((permission) => {
+          if (permission === "granted") {
+            sendPostureNotification();
+          }
+        });
+      }
+    }
+  };
+
+  // Effect to track bad posture events and manage the stack
+  useEffect(() => {
+    if (report && report.bad_posture_events !== undefined) {
+      const currentBadEvents = report.bad_posture_events;
+
+      // Check if there's a new bad posture event
+      if (currentBadEvents > lastBadPostureEvents.current) {
+        const newEvents = currentBadEvents - lastBadPostureEvents.current;
+
+        setPostureEventStack((prevStack) => {
+          const updatedStack = [...prevStack];
+
+          // Add new events to the stack
+          for (let i = 0; i < newEvents; i++) {
+            updatedStack.push(Date.now());
+          }
+
+          // Keep only the last 3 events
+          const trimmedStack = updatedStack.slice(-3);
+
+          // Check if we have 3 consecutive events
+          if (trimmedStack.length === 3) {
+            sendPostureNotification();
+            // Clear the stack after notification
+            return [];
+          }
+
+          return trimmedStack;
+        });
+
+        lastBadPostureEvents.current = currentBadEvents;
+      }
+    }
+  }, [report?.bad_posture_events]);
+
+  // Request notification permission on component mount
+  useEffect(() => {
+    if ("Notification" in window && Notification.permission === "default") {
+      Notification.requestPermission();
+    }
+  }, []);
+
   const handleStartMonitoring = () => {
     startMonitoring();
     setIsMonitoring(true);
     localStorage.setItem("isMonitoring", "true");
+    // Reset tracking variables
+    setPostureEventStack([]);
+    lastBadPostureEvents.current = 0;
   };
 
   const handleEndSession = () => {
@@ -63,15 +145,18 @@ export default function PosturePage() {
     stopCamera();
     setIsMonitoring(false);
     localStorage.setItem("isMonitoring", "false");
+    // Reset tracking variables
+    setPostureEventStack([]);
+    lastBadPostureEvents.current = 0;
     router.push("/dashboard");
   };
 
   useEffect(() => {
-      const stored = localStorage.getItem("isMonitoring");
-      if (stored === "true" && !isMonitoring) {
-        setIsMonitoring(true);
-      }
-    }, []);
+    const stored = localStorage.getItem("isMonitoring");
+    if (stored === "true" && !isMonitoring) {
+      setIsMonitoring(true);
+    }
+  }, []);
 
   return (
     <div className="min-h-screen w-full bg-gradient-to-br from-blue-50 to-gray-100 flex flex-col">
@@ -79,9 +164,27 @@ export default function PosturePage() {
         <h1 className="text-2xl font-bold text-blue-800 tracking-tight">
           Posture Analysis
         </h1>
-        <span className="text-gray-500 font-medium">
-          Tech Tacticos Spinovate
-        </span>
+        <div className="flex items-center gap-4">
+          {/* Notification Status Indicator */}
+          {isMonitoring && (
+            <div className="flex items-center gap-2 text-sm">
+              <div className="flex items-center gap-1">
+                <div className="w-2 h-2 bg-orange-500 rounded-full"></div>
+                <span className="text-gray-600">
+                  Events: {postureEventStack.length}/3
+                </span>
+              </div>
+              {report && (
+                <span className="text-gray-500">
+                  Total Bad Events: {report.bad_posture_events}
+                </span>
+              )}
+            </div>
+          )}
+          <span className="text-gray-500 font-medium">
+            Tech Tacticos Spinovate
+          </span>
+        </div>
       </header>
 
       {/* Control Buttons Section */}
@@ -92,8 +195,18 @@ export default function PosturePage() {
               onClick={handleStartMonitoring}
               className="bg-blue-600 hover:bg-blue-700 text-white font-semibold px-8 py-3 rounded-lg shadow-md transition-colors duration-200 flex items-center gap-2"
             >
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.828 14.828a4 4 0 01-5.656 0M9 10h1m4 0h1m-6 4h.01M19 10a9 9 0 11-18 0 9 9 0 0118 0z" />
+              <svg
+                className="w-5 h-5"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M14.828 14.828a4 4 0 01-5.656 0M9 10h1m4 0h1m-6 4h.01M19 10a9 9 0 11-18 0 9 9 0 0118 0z"
+                />
               </svg>
               Start Monitoring
             </button>
@@ -102,9 +215,24 @@ export default function PosturePage() {
               onClick={handleEndSession}
               className="bg-red-600 hover:bg-red-700 text-white font-semibold px-8 py-3 rounded-lg shadow-md transition-colors duration-200 flex items-center gap-2"
             >
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 9l6 6m0-6l-6 6" />
+              <svg
+                className="w-5 h-5"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+                />
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M9 9l6 6m0-6l-6 6"
+                />
               </svg>
               End Session
             </button>
@@ -115,27 +243,47 @@ export default function PosturePage() {
       <main className="flex-1 flex flex-col md:flex-row gap-8 px-6 py-8 max-w-7xl mx-auto w-full">
         {/* Camera Feed Section */}
         <div className="flex-1 bg-white rounded-xl shadow-lg p-6">
-          <h2 className="text-xl font-semibold text-gray-800 mb-4">Live Feed</h2>
+          <h2 className="text-xl font-semibold text-gray-800 mb-4">
+            Live Feed
+          </h2>
           {isMonitoring ? (
             <div className="relative">
-              <img 
-                src="http://127.0.0.1:8000/video/stream" 
-                alt="Live Webcam Feed" 
+              <img
+                src="http://127.0.0.1:8000/video/stream"
+                alt="Live Webcam Feed"
                 className="w-full h-auto rounded-lg shadow-sm"
               />
               <div className="absolute top-4 right-4 bg-red-500 text-white px-3 py-1 rounded-full text-sm font-medium flex items-center gap-2">
                 <div className="w-2 h-2 bg-white rounded-full animate-pulse"></div>
                 LIVE
               </div>
+              {/* Posture Event Stack Indicator */}
+              {postureEventStack.length > 0 && (
+                <div className="absolute top-4 left-4 bg-orange-500 text-white px-3 py-1 rounded-full text-sm font-medium">
+                  ⚠️ {postureEventStack.length}/3
+                </div>
+              )}
             </div>
           ) : (
             <div className="flex items-center justify-center h-64 bg-gray-100 rounded-lg border-2 border-dashed border-gray-300">
               <div className="text-center">
-                <svg className="w-16 h-16 text-gray-400 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                <svg
+                  className="w-16 h-16 text-gray-400 mx-auto mb-4"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"
+                  />
                 </svg>
                 <p className="text-gray-500 font-medium">Camera is off</p>
-                <p className="text-gray-400 text-sm">Click "Start Monitoring" to begin</p>
+                <p className="text-gray-400 text-sm">
+                  Click "Start Monitoring" to begin
+                </p>
               </div>
             </div>
           )}
@@ -166,6 +314,41 @@ export default function PosturePage() {
                 </li>
               ))}
             </ul>
+
+            {/* Real-time monitoring stats */}
+            {report && (
+              <div className="mt-4 p-4 bg-gray-50 rounded-lg w-full">
+                <h4 className="font-semibold text-gray-700 mb-2">
+                  Session Stats
+                </h4>
+                <div className="grid grid-cols-2 gap-4 text-sm">
+                  <div>
+                    <span className="text-gray-600">Bad Posture Events:</span>
+                    <span className="ml-2 font-semibold text-red-600">
+                      {report.bad_posture_events}
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-gray-600">Session Score:</span>
+                    <span className="ml-2 font-semibold text-blue-600">
+                      {report.session_score}/100
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-gray-600">Bad Posture Time:</span>
+                    <span className="ml-2 font-semibold text-orange-600">
+                      {report.bad_posture_time_min.toFixed(1)} min
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-gray-600">Session Duration:</span>
+                    <span className="ml-2 font-semibold text-green-600">
+                      {report.session_duration_min.toFixed(1)} min
+                    </span>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         </section>
       )}

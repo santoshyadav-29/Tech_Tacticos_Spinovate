@@ -36,6 +36,7 @@ class Settings(BaseSettings):
     YAW_ANGLE_THRESH: int = 20  # degrees
     EAR_CONSEC_FRAMES: int = 25
     YAWN_CONSEC_FRAMES: int = 15
+    LONG_BLINK_GAP_SEC: int = 10  # seconds
     
     class Config:
         env_file = ".env"

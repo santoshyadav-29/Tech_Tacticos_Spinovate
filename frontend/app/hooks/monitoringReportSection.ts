@@ -22,6 +22,9 @@ export type PostureReportData = {
     yawns_detected: number;
     yawns_per_hour: number;
     session_score: number;
+    blinks: number;
+    long_blink_gaps: number;
+    longest_no_blink_sec: number;
 };
 
 const API_BASE = 'http://127.0.0.1:8000/monitoring';

@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends
 from fastapi.responses import StreamingResponse
 from app.services.video_stream import VideoStreamService
 from app.models.schemas import FaceMetrics, DrowsinessStatus
+from app.services.stream_window import stream_window
 
 router = APIRouter()
 
@@ -42,3 +43,7 @@ async def close_camera(service: VideoStreamService = Depends(get_video_service))
     """Close the camera resource."""
     service.close_camera()
     return {"message": "Camera closed."}
+
+@router.get("/stream_window")
+def video_feed():
+    return StreamingResponse(stream_window(), media_type="multipart/x-mixed-replace; boundary=frame")

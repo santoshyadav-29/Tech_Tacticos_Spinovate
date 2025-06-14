@@ -15,7 +15,7 @@ class Settings(BaseSettings):
     ALLOWED_HOSTS: List[str] = ["*"]
     
     # Camera settings
-    CAMERA_INDEX: int = 1
+    CAMERA_INDEX: int = 0
     VIDEO_FPS: int = 15
     
     # Distance measurement

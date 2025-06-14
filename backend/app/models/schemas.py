@@ -24,6 +24,8 @@ class MonitoringResponse(BaseModel):
     status: str
 
 class SessionReport(BaseModel):
+    start_time: Optional[str]
+    stop_time: Optional[str]
     session_duration_min: float
     time_face_visible_min: float
     avg_distance_cm: float
@@ -40,4 +42,5 @@ class SessionReport(BaseModel):
     drowsiness_time_min: float
     drowsiness_events: int
     yawns_detected: int
+    yawns_per_hour: float
     session_score: float

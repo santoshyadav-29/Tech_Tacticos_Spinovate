@@ -1,14 +1,24 @@
 "use client";
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { usePostureDetection } from "@/app/hooks/usePostureDetection";
 import { VideoCapture } from "@/components/VideoCapture";
 import { AngleStats } from "@/components/AngleStats";
 // import { StickFigure } from "@/components/StickFigure"; // if you modularize it
 
 import { computeAngles, getFeedback } from "@/app/utils/postureUtils"; // optional: extract these too
+import { startMonitoring, stopCamera, stopMonitoring } from "@/app/hooks/monitoringReportSection";
+import { useRouter } from "next/navigation";
 
 export default function PosturePage() {
-  const [isMonitoring, setIsMonitoring] = useState(false);
+  const router = useRouter();
+  const [isMonitoring, setIsMonitoring] = useState(() => {
+      if (typeof window !== "undefined") {
+        return localStorage.getItem("isMonitoring") === "true";
+      }
+      return false;
+    });
+
+  // Use usePostureDetection only when isMonitoring is true
   const { pitch, distance, postureAngles } = usePostureDetection(isMonitoring);
 
   // Map backend keys to new display names, keeping values the same
@@ -43,12 +53,25 @@ export default function PosturePage() {
   );
 
   const handleStartMonitoring = () => {
+    startMonitoring();
     setIsMonitoring(true);
+    localStorage.setItem("isMonitoring", "true");
   };
 
   const handleEndSession = () => {
+    stopMonitoring();
+    stopCamera();
     setIsMonitoring(false);
+    localStorage.setItem("isMonitoring", "false");
+    router.push("/dashboard");
   };
+
+  useEffect(() => {
+      const stored = localStorage.getItem("isMonitoring");
+      if (stored === "true" && !isMonitoring) {
+        setIsMonitoring(true);
+      }
+    }, []);
 
   return (
     <div className="min-h-screen w-full bg-gradient-to-br from-blue-50 to-gray-100 flex flex-col">

@@ -27,7 +27,7 @@ class VideoStreamService:
         """Initialize camera capture."""
         if self.camera_initialized:
             return
-        self.cap = cv2.VideoCapture(1, cv2.CAP_DSHOW)
+        self.cap = cv2.VideoCapture(settings.CAMERA_INDEX)
         # self.cap = cv2.VideoCapture("http://172.16.3.222:4747/video")
         if not self.cap.isOpened():
             raise CameraNotAvailableException()
@@ -46,6 +46,9 @@ class VideoStreamService:
         frame_interval = 1.0 / settings.VIDEO_FPS
         
         while True:
+            if self.cap is None or not self.cap.isOpened():
+                # print("Camera is not initialized or already closed.")
+                break
             start_time = time.time()
             ret, frame = self.cap.read()
             

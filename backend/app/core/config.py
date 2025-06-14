@@ -15,13 +15,13 @@ class Settings(BaseSettings):
     ALLOWED_HOSTS: List[str] = ["*"]
     
     # Camera settings
-    CAMERA_INDEX: int = 0
+    CAMERA_INDEX: int = 1
     VIDEO_FPS: int = 15
     
     # Distance measurement
     KNOWN_DISTANCE: float = 50.0  # cm
-    REAL_WIDTH: float = 16.0      # cm (human head average)
-    FOCAL_LENGTH: int = 500       # Adjusted focal length
+    REAL_WIDTH: float = 17.0      # cm (human head average)
+    FOCAL_LENGTH: int = 440       # Adjusted focal length
     
     # Thresholds
     GOOD_DISTANCE_MIN: int = 40

@@ -52,8 +52,8 @@ export default function PosturePage() {
   const notifiedAlerts = useRef<Set<string>>(new Set());
   const alertCooldowns = useRef<Map<string, number>>(new Map());
 
-  // Audio element for alert sound
-  const alertAudio = useRef<HTMLAudioElement | null>(null);
+  // Audio elements for different alert types
+  const alertAudioElements = useRef<Map<string, HTMLAudioElement>>(new Map());
 
   // Use the monitoring report hook to fetch data
   const report = useMonitoringReport(isMonitoring, 2000);
@@ -108,33 +108,53 @@ export default function PosturePage() {
     insufficient_blinks: 'low'
   };
 
-  // Initialize audio element
+  // Audio file mapping for each alert type
+  const alertAudioFiles: Record<keyof AlertData, string> = {
+    posture_angle_unhealthy: "/sounds/posture-alert.mp3",
+    multiple_posture_angles_unhealthy: "/sounds/urgent-alert.mp3",
+    distance_too_close: "/sounds/distance-alert.mp3",
+    excessive_yawning: "/sounds/yawn-alert.mp3",
+    yawn_and_drowsy: "/sounds/drowsy-alert.mp3",
+    insufficient_blinks: "/sounds/blink-alert.mp3"
+  };
+
+  // Initialize audio elements for each alert type
   useEffect(() => {
-    alertAudio.current = new Audio("/sounds/alert.mp3");
-    alertAudio.current.preload = 'auto';
-    
-    // Set volume to a reasonable level
-    alertAudio.current.volume = 0.7;
+    // Initialize audio elements for each alert type
+    Object.entries(alertAudioFiles).forEach(([alertType, audioFile]) => {
+      const audio = new Audio(audioFile);
+      audio.preload = 'auto';
+      audio.volume = 0.8; // Set reasonable volume
+      alertAudioElements.current.set(alertType, audio);
+    });
+
+    // Add special audio for posture notification (3 consecutive bad postures)
+    const postureNotificationAudio = new Audio("/sounds/posture-notification.mp3");
+    postureNotificationAudio.preload = 'auto';
+    postureNotificationAudio.volume = 1.0;
+    alertAudioElements.current.set('posture_notification', postureNotificationAudio);
     
     return () => {
-      if (alertAudio.current) {
-        alertAudio.current.pause();
-        alertAudio.current = null;
-      }
+      // Clean up all audio elements
+      alertAudioElements.current.forEach((audio) => {
+        audio.pause();
+      });
+      alertAudioElements.current.clear();
     };
   }, []);
 
-  // Function to play alert sound
-  const playAlertSound = (severity: 'low' | 'medium' | 'high') => {
-    if (alertAudio.current) {
+  // Function to play specific alert sound
+  const playAlertSound = (alertType: keyof AlertData | 'posture_notification') => {
+    const audioElement = alertAudioElements.current.get(alertType);
+    if (audioElement) {
       try {
         // Reset audio to beginning and play
-        alertAudio.current.currentTime = 0;
-        alertAudio.current.play().catch((error) => {
-          console.log("Audio playback failed:", error);
+        audioElement.currentTime = 0;
+        audioElement.play().catch((error) => {
+          console.log(`Audio playback failed for ${alertType}:`, error);
         });
       } catch (error) {
-        console.log("Audio setup failed:", error);
+        console.log(`Audio setup failed for ${alertType}:`, error);
       }
     }
   };
@@ -202,8 +222,8 @@ export default function PosturePage() {
           requireInteraction: severity === 'high',
         });
 
-        // Play alert sound for all alerts
-        playAlertSound(severity);
+        // Play specific alert sound for this alert type
+        playAlertSound(alertType);
 
         // Set cooldown for this alert type
         const cooldownDuration = severity === 'high' ? 15000 : severity === 'medium' ? 12000 : 10000;
@@ -249,8 +269,8 @@ export default function PosturePage() {
           requireInteraction: true,
         });
 
-        // Play alert sound for posture notification
-        playAlertSound('high');
+        // Play special posture notification sound
+        playAlertSound('posture_notification');
       } else if (Notification.permission !== "denied") {
         Notification.requestPermission().then((permission) => {
           if (permission === "granted") {
@@ -385,8 +405,8 @@ export default function PosturePage() {
   };
 
   return (
-    <div className="min-h-screen w-full bg-gradient-to-br from-blue-50 to-gray-100 flex flex-col">
-      <header className="w-full px-6 py-4 flex items-center justify-between bg-white shadow-sm">
+    <div className="min-h-screen w-full  flex flex-col">
+      <header className="w-full px-6 py-4 flex items-center justify-between ">
         <h1 className="text-2xl font-bold text-blue-800 tracking-tight">
           Posture Analysis
         </h1>
@@ -501,7 +521,7 @@ export default function PosturePage() {
 
       <main className="flex-1 flex flex-col md:flex-row gap-8 px-6 py-8 max-w-7xl mx-auto w-full">
         {/* Camera Feed Section */}
-        <div className="flex-1 bg-white rounded-xl shadow-lg p-6">
+        <div className="flex-1 rounded-xl shadow-lg p-6">
           <h2 className="text-xl font-semibold text-gray-800 mb-4">
             Live Feed
           </h2>

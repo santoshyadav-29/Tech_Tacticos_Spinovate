@@ -15,7 +15,6 @@ import Link from "next/link";
 
 const sidebarLinks = [
   { name: "Dashboard", href: "/dashboard", icon: <FiHome /> },
-  { name: "Notifications", href: "/dashboard/notification", icon: <FiBell /> },
   { name: "Scan", href: "/dashboard/posture", icon: <FiCamera /> },
   { name: "Exercise", href: "/dashboard/excercise", icon: <FiActivity /> },
   { name: "Guide", href: "/dashboard/guide", icon: <FiBookOpen /> },

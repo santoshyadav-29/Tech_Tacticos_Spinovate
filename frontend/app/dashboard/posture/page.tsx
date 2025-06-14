@@ -3,14 +3,12 @@ import React, { useEffect, useMemo, useState, useRef } from "react";
 import { usePostureDetection } from "@/app/hooks/usePostureDetection";
 import { VideoCapture } from "@/components/VideoCapture";
 import { AngleStats } from "@/components/AngleStats";
-
 import { computeAngles, getFeedback } from "@/app/utils/postureUtils";
 import {
   startMonitoring,
   stopCamera,
   stopMonitoring,
   useMonitoringReport,
-  PostureReportData,
 } from "@/app/hooks/monitoringReportSection";
 import { useRouter } from "next/navigation";
 
@@ -59,7 +57,6 @@ export default function PosturePage() {
 
   // Use the monitoring report hook to fetch data
   const report = useMonitoringReport(isMonitoring, 2000);
-
   const { pitch, distance, postureAngles } = usePostureDetection(isMonitoring);
 
   const angleNameMap: Record<string, string> = {

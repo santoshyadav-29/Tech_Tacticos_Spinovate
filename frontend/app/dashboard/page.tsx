@@ -1,13 +1,254 @@
-import React from "react";
+// components/PostureReport.tsx
 
-const Page = () => {
+import React from "react";
+import {
+  CheckCircle,
+  AlertTriangle,
+  Eye,
+  Target,
+  Zap,
+  Clock,
+  UserCheck,
+} from "lucide-react";
+
+// Type for your posture report data
+type PostureReportData = {
+  session_duration_min: number;
+  time_face_visible_min: number;
+  avg_distance_cm: number;
+  time_good_distance_min: number;
+  avg_pitch_deg: number;
+  bad_posture_time_min: number;
+  bad_posture_events: number;
+  max_good_posture_streak_sec: number;
+  avg_brightness: number;
+  max_brightness: number;
+  high_brightness_time_min: number;
+  high_brightness_events: number;
+  face_missing_time_min: number;
+  drowsiness_time_min: number;
+  drowsiness_events: number;
+  yawns_detected: number;
+  session_score: number;
+};
+
+// Hardcoded sample data (replace with backend data as needed)
+const DATA: PostureReportData = {
+  session_duration_min: 0.5,
+  time_face_visible_min: 0.49,
+  avg_distance_cm: 62.09,
+  time_good_distance_min: 0.32,
+  avg_pitch_deg: 10.06,
+  bad_posture_time_min: 0.06,
+  bad_posture_events: 17,
+  max_good_posture_streak_sec: 10.2,
+  avg_brightness: 110.77,
+  max_brightness: 143.24,
+  high_brightness_time_min: 0.01,
+  high_brightness_events: 9,
+  face_missing_time_min: 0.01,
+  drowsiness_time_min: 0,
+  drowsiness_events: 0,
+  yawns_detected: 0,
+  session_score: 96.07,
+};
+
+// Circular progress component
+const CircularProgress: React.FC<{ percentage: number; color?: string }> = ({
+  percentage,
+  color = "#2563eb",
+}) => {
+  const size = 110;
+  const strokeWidth = 10;
+  const radius = (size - strokeWidth) / 2;
+  const circumference = 2 * Math.PI * radius;
+  const offset = circumference - (percentage / 100) * circumference;
+
   return (
-    <div>
-      <h1>Dashboard</h1>
+    <svg width={size} height={size} className="block mx-auto">
+      <circle
+        stroke="#e5e7eb"
+        fill="none"
+        cx={size / 2}
+        cy={size / 2}
+        r={radius}
+        strokeWidth={strokeWidth}
+      />
+      <circle
+        stroke={color}
+        fill="none"
+        cx={size / 2}
+        cy={size / 2}
+        r={radius}
+        strokeWidth={strokeWidth}
+        strokeDasharray={circumference}
+        strokeDashoffset={offset}
+        strokeLinecap="round"
+        style={{ transition: "stroke-dashoffset 1s ease" }}
+      />
+      <text
+        x="50%"
+        y="50%"
+        textAnchor="middle"
+        dy="0.3em"
+        fontSize="2rem"
+        fontWeight="bold"
+        fill="#1e293b"
+      >
+        {Math.round(percentage)}%
+      </text>
+    </svg>
+  );
+};
+
+const PostureReport: React.FC = () => {
+  const data = DATA;
+
+  // Derived metrics
+  const faceVisibilityRate =
+    (data.time_face_visible_min / data.session_duration_min) * 100;
+  const goodPostureRate =
+    ((data.session_duration_min - data.bad_posture_time_min) /
+      data.session_duration_min) *
+    100;
+  const goodDistanceRate =
+    (data.time_good_distance_min / data.session_duration_min) * 100;
+
+  return (
+    <div className="p-8">
+      {/* Title */}
+      <div className="mb-8">
+        <h2 className="text-3xl font-bold text-blue-900 mb-2">
+          Posture Report
+        </h2>
+        <p className="text-gray-500">
+          Session Duration: {(data.session_duration_min * 60).toFixed(0)} sec
+        </p>
+      </div>
+
+      {/* Main Score */}
+      <div className="bg-white rounded-xl shadow-lg p-6 flex flex-col md:flex-row items-center mb-8">
+        <div className="flex-1 flex flex-col items-center">
+          <CircularProgress percentage={data.session_score} color="#22c55e" />
+          <div className="mt-4 text-center">
+            <div className="flex items-center justify-center text-green-600 font-semibold text-lg">
+              <CheckCircle size={20} className="mr-2" />
+              Excellent Posture!
+            </div>
+            <div className="text-gray-500 text-sm">
+              Keep up the great work maintaining proper posture.
+            </div>
+          </div>
+        </div>
+        <div className="flex-1 mt-8 md:mt-0 md:ml-8 grid grid-cols-2 gap-4">
+          <div className="flex flex-col items-center bg-blue-50 rounded-lg p-4">
+            <Eye className="text-blue-500 mb-2" size={28} />
+            <span className="font-bold text-xl text-blue-700">
+              {faceVisibilityRate.toFixed(0)}%
+            </span>
+            <span className="text-xs text-gray-500">Face Visible</span>
+          </div>
+          <div className="flex flex-col items-center bg-green-50 rounded-lg p-4">
+            <UserCheck className="text-green-500 mb-2" size={28} />
+            <span className="font-bold text-xl text-green-700">
+              {goodPostureRate.toFixed(0)}%
+            </span>
+            <span className="text-xs text-gray-500">Good Posture</span>
+          </div>
+          <div className="flex flex-col items-center bg-purple-50 rounded-lg p-4">
+            <Target className="text-purple-500 mb-2" size={28} />
+            <span className="font-bold text-xl text-purple-700">
+              {data.avg_distance_cm.toFixed(0)}cm
+            </span>
+            <span className="text-xs text-gray-500">Avg Distance</span>
+          </div>
+          <div className="flex flex-col items-center bg-yellow-50 rounded-lg p-4">
+            <AlertTriangle className="text-yellow-500 mb-2" size={28} />
+            <span className="font-bold text-xl text-yellow-700">
+              {data.bad_posture_events}
+            </span>
+            <span className="text-xs text-gray-500">Bad Posture Events</span>
+          </div>
+        </div>
+      </div>
+
+      {/* Details Grid */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        {/* Posture Details */}
+        <div className="bg-white rounded-xl shadow-md p-6">
+          <h3 className="font-semibold text-blue-900 mb-4">
+            Posture Details
+          </h3>
+          <div className="space-y-3">
+            <div className="flex justify-between items-center">
+              <span className="text-gray-600">Best Streak</span>
+              <span className="font-bold text-green-700">
+                {data.max_good_posture_streak_sec.toFixed(1)}s
+              </span>
+            </div>
+            <div className="flex justify-between items-center">
+              <span className="text-gray-600">Avg Head Pitch</span>
+              <span className="font-bold text-blue-700">
+                {data.avg_pitch_deg.toFixed(1)}°
+              </span>
+            </div>
+            <div className="flex justify-between items-center">
+              <span className="text-gray-600">Face Missing</span>
+              <span className="font-bold text-red-500">
+                {(data.face_missing_time_min * 60).toFixed(0)}s
+              </span>
+            </div>
+          </div>
+        </div>
+        {/* Environment & Alerts */}
+        <div className="bg-white rounded-xl shadow-md p-6">
+          <h3 className="font-semibold text-blue-900 mb-4">
+            Environment & Wellness
+          </h3>
+          <div className="space-y-3">
+            <div className="flex justify-between items-center">
+              <span className="text-gray-600 flex items-center">
+                <Zap className="text-yellow-500 mr-1" size={18} />
+                Avg Brightness
+              </span>
+              <span className="font-bold text-yellow-700">
+                {data.avg_brightness.toFixed(0)}
+              </span>
+            </div>
+            <div className="flex justify-between items-center">
+              <span className="text-gray-600">High Brightness Events</span>
+              <span className="font-bold text-orange-600">
+                {data.high_brightness_events}
+              </span>
+            </div>
+            <div className="flex justify-between items-center">
+              <span className="text-gray-600">Yawns Detected</span>
+              <span className="font-bold text-gray-700">
+                {data.yawns_detected}
+              </span>
+            </div>
+            <div className="flex justify-between items-center">
+              <span className="text-gray-600">Drowsiness Events</span>
+              <span className="font-bold text-gray-700">
+                {data.drowsiness_events}
+              </span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Recommendations */}
+      <div className="mt-8 bg-gradient-to-r from-blue-50 to-green-50 rounded-xl shadow p-6">
+        <h3 className="font-semibold text-blue-900 mb-2">Recommendations</h3>
+        <ul className="list-disc pl-6 text-gray-700 text-sm space-y-1">
+          <li>Maintain your current distance from the screen (60-70cm is ideal).</li>
+          <li>Take micro-breaks every 20 minutes to stretch and reset posture.</li>
+          <li>Keep your workspace well-lit, but avoid excessive brightness.</li>
+          <li>Stay hydrated and blink regularly to reduce eye strain.</li>
+        </ul>
+      </div>
     </div>
   );
 };
 
-export default Page;
-
-// Remove this file, as all pages are now under dashboard.
+export default PostureReport;

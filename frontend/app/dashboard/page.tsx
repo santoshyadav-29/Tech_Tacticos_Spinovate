@@ -889,11 +889,11 @@ const PostureReport = () => {
             <div className="grid grid-cols-2 gap-2 text-xs">
               <div className="bg-blue-50 p-2 rounded">
                 <div className="text-blue-700">Rate</div>
-                <div className="font-bold">{(report.blinks / (sessionHours * 60)).toFixed(1)}/min</div>
+                <div className="font-bold text-gray-900">{(report.blinks / (sessionHours * 60)).toFixed(1)}/min</div>
               </div>
               <div className="bg-orange-50 p-2 rounded">
                 <div className="text-orange-700">Long gaps</div>
-                <div className="font-bold">{report.long_blink_gaps}</div>
+                <div className="font-bold text-gray-900">{report.long_blink_gaps}</div>
               </div>
             </div>
           </EnhancedMetricCard>

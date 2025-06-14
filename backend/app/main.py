@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from app.api.routes import video, monitoring, health
+from app.api.routes import video, monitoring, health, alerts
 from app.core.config import settings
 
 def create_application() -> FastAPI:
@@ -25,6 +25,7 @@ def create_application() -> FastAPI:
     application.include_router(health.router, prefix="/health", tags=["health"])
     application.include_router(video.router, prefix="/video", tags=["video"])
     application.include_router(monitoring.router, prefix="/monitoring", tags=["monitoring"])
+    application.include_router(alerts.router, prefix="/alerts", tags=["alerts"])
 
     return application
 

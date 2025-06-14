@@ -7,6 +7,7 @@ from app.core.exceptions import CameraNotAvailableException
 from app.services.face_detection import FaceDetectionService
 from app.services.drowsiness_detection import DrowsinessDetectionService
 from app.services.monitoring import MonitoringService
+from app.services.alert_service import AlertService
 
 class VideoStreamService:
     """Service for video streaming and processing."""
@@ -16,6 +17,7 @@ class VideoStreamService:
         self.face_detection_service = FaceDetectionService()
         self.drowsiness_service = DrowsinessDetectionService()
         self.monitoring_service = MonitoringService()
+        self.alert_service = AlertService()  # You can adjust n_seconds as needed
         self.latest_data: Dict[str, Any] = {
             "distance": None, "pitch": None, "brightness": None,
             "ear": None, "mar": None, "yaw": None, "posture_angles": None
@@ -136,6 +138,26 @@ class VideoStreamService:
                 "yaw": round(yaw, 2) if yaw else None,
                 "posture_angles": posture_angles if posture_angles else None
             })
+        # Alert logic
+        posture_thresholds = {
+            "Degree of Anteversion of Cervical Spine (y1)": (25, 34),
+            "T1 Slope (y2)": (30, 50),
+            "Upper Thoracic Kyphosis Angle (y3)": (140, 158),
+            "Middle and Lower Thoracic Kyphosis Angle (y4)": (154, 155.5),
+            "T8-T12-L3 Angle (new)": (175, 180.3),
+            "Lumbar Lordosis Angle (y5)": (170, 174),
+        }
+        self.alert_service.update(
+            posture_angles=posture_angles,
+            distance=distance,
+            yawn=bool(yawn),
+            drowsy=bool(drowsiness),
+            blink=bool(blink_detected),
+            posture_thresholds=posture_thresholds,
+            distance_threshold=settings.GOOD_DISTANCE_MIN,  # Too close if less than min
+            yawn_threshold=3,  # Example: 3 yawns in n seconds
+            blink_threshold=3  # Example: at least 3 blinks in n seconds
+        )
         
         return data
     
@@ -177,3 +199,6 @@ class VideoStreamService:
         """Cleanup resources."""
         self.close_camera()
         cv2.destroyAllWindows()
+
+    def get_and_reset_alerts(self) -> Dict[str, bool]:
+        return self.alert_service.get_and_reset_alerts()

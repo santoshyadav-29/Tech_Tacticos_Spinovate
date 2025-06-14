@@ -175,7 +175,7 @@ export default function ExerciseRecommendations(): JSX.Element {
   const currentExerciseSet = exerciseSets.find(set => set.id === activeSet);
 
   return (
-    <section className="w-full bg-white py-16 px-4 md:px-16">
+    <section className="w-full py-16 px-4 md:px-16">
       <div className="max-w-6xl mx-auto">
         {/* Header */}
         <div className="text-center mb-12">
@@ -254,15 +254,7 @@ export default function ExerciseRecommendations(): JSX.Element {
                         ⭐ {exercise.difficulty}
                       </span>
                     </div>
-                    
-                    <button
-                      onClick={() => startExercise(exercise.name, exercise.duration)}
-                      className="w-full bg-[#0d3b66] text-white py-3 px-4 rounded-lg font-semibold hover:bg-[#1a4d7a] transition-colors duration-200 flex items-center justify-center gap-2"
-                      type="button"
-                    >
-                      <span>🎯</span>
-                      Start Exercise
-                    </button>
+                    {/* Removed Start Exercise button */}
                   </div>
                 </div>
               ))}

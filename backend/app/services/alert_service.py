@@ -10,7 +10,7 @@ class AlertService:
         distance_n_seconds: int = 5,
         yawn_n_seconds: int = 5,
         drowsy_n_seconds: int = 5,
-        blink_n_seconds: int = 5
+        blink_n_seconds: int = 10
     ):
         self.posture_n_seconds = posture_n_seconds
         self.multi_posture_n_seconds = multi_posture_n_seconds

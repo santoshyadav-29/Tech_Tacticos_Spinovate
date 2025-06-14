@@ -35,28 +35,6 @@ type PostureReportData = {
   session_score: number;
 };
 
-// Hardcoded sample data (replace with backend data as needed)
-// const DATA: PostureReportData = {
-//   session_duration_min: 0.5,
-//   time_face_visible_min: 0.49,
-//   avg_distance_cm: 62.09,
-//   time_good_distance_min: 0.32,
-//   avg_pitch_deg: 10.06,
-//   bad_posture_time_min: 0.06,
-//   bad_posture_events: 17,
-//   max_good_posture_streak_sec: 10.2,
-//   avg_brightness: 110.77,
-//   max_brightness: 143.24,
-//   high_brightness_time_min: 0.01,
-//   high_brightness_events: 9,
-//   face_missing_time_min: 0.01,
-//   drowsiness_time_min: 0,
-//   drowsiness_events: 0,
-//   yawns_detected: 0,
-//   session_score: 96.07,
-// };
-
-// Circular progress component
 const CircularProgress: React.FC<{ percentage: number; color?: string }> = ({
   percentage,
   color = "#2563eb",

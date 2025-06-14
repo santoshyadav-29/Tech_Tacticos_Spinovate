@@ -1,12 +1,12 @@
 import Image from "next/image"
 import Link from "next/link"
-import { Zap, Users, Shield } from "lucide-react"
+import { Zap, Users, Shield, Eye, Activity} from "lucide-react"
 
 export default function Home() {
   return (
     <div className="min-h-100% flex flex-col bg-gradient-to-br from-[#eaf3fb] via-[#f4faff] to-[#eafaf1] font-sans">
       {/* Navbar/Header */}
-      <header className="w-full flex justify-between items-center px-4 md:px-8 py-4 bg-white/90 backdrop-blur-md shadow-lg border-b border-white/20 relative z-20 top-0">
+      <header className="w-full flex justify-between items-center px-4 md:px-8 py-4 border-b border-white/20 relative z-20 sticky top-0">
         <div className="flex items-center gap-3">
           <div className="relative">
             <span className="bg-gradient-to-br from-[#27a1ff] to-[#1e90ff] rounded-full w-12 h-12 flex items-center justify-center text-xl font-bold text-white shadow-lg">
@@ -221,9 +221,9 @@ export default function Home() {
       <section id="features" className="py-20 bg-white/50 backdrop-blur-sm">
         <div className="max-w-6xl mx-auto px-4">
           <div className="text-center mb-16">
-            <h2 className="text-4xl md:text-5xl font-bold text-[#0d3b66] mb-6">Why Choose Spinovate?</h2>
+            <h2 className="text-4xl md:text-5xl font-bold text-[#0d3b66] mb-6">What Do We Do?</h2>
             <p className="text-xl text-gray-600 max-w-3xl mx-auto">
-              Our cutting-edge AI technology provides comprehensive posture analysis and personalized health solutions.
+              Spinovate blends real-time AI technology with health-first design to monitor, evaluate, and improve your posture, comfort, and screen wellness.
             </p>
           </div>
 
@@ -232,37 +232,35 @@ export default function Home() {
               <div className="w-16 h-16 bg-gradient-to-r from-blue-500 to-blue-600 rounded-2xl flex items-center justify-center mb-6 group-hover:scale-110 transition-transform">
                 <Zap className="w-8 h-8 text-white" />
               </div>
-              <h3 className="text-2xl font-bold text-[#0d3b66] mb-4">Real-Time Analysis</h3>
+              <h3 className="text-2xl font-bold text-[#0d3b66] mb-4">AI Posture Estimation</h3>
               <p className="text-gray-600 leading-relaxed">
-                Get instant feedback on your posture with our advanced AI algorithms that analyze your body positioning
-                in real-time.
+                Continuously track your body alignment in real time using AI to detect slouching, poor posture, and fatigue-inducing patterns.
               </p>
             </div>
 
             <div className="group p-8 rounded-2xl bg-white shadow-lg hover:shadow-2xl transition-all duration-300 transform hover:-translate-y-2 border border-gray-100">
               <div className="w-16 h-16 bg-gradient-to-r from-green-500 to-green-600 rounded-2xl flex items-center justify-center mb-6 group-hover:scale-110 transition-transform">
-                <Users className="w-8 h-8 text-white" />
+                <Eye className="w-8 h-8 text-white" />
               </div>
-              <h3 className="text-2xl font-bold text-[#0d3b66] mb-4">Personalized Plans</h3>
+              <h3 className="text-2xl font-bold text-[#0d3b66] mb-4">Eye & Screen Wellness</h3>
               <p className="text-gray-600 leading-relaxed">
-                Receive customized exercise routines and correction plans tailored specifically to your unique posture
-                needs and goals.
+                Keep your eyes safe with smart brightness monitoring, screen usage tracking, and strain-detection features for healthier digital habits.
               </p>
             </div>
 
             <div className="group p-8 rounded-2xl bg-white shadow-lg hover:shadow-2xl transition-all duration-300 transform hover:-translate-y-2 border border-gray-100">
               <div className="w-16 h-16 bg-gradient-to-r from-purple-500 to-purple-600 rounded-2xl flex items-center justify-center mb-6 group-hover:scale-110 transition-transform">
-                <Shield className="w-8 h-8 text-white" />
+                <Activity className="w-8 h-8 text-white" />
               </div>
-              <h3 className="text-2xl font-bold text-[#0d3b66] mb-4">Progress Tracking</h3>
+              <h3 className="text-2xl font-bold text-[#0d3b66] mb-4">Health Insights & Reports</h3>
               <p className="text-gray-600 leading-relaxed">
-                Monitor your improvement over time with detailed analytics and visual progress reports to stay
-                motivated.
+                Get periodic session reports, posture summaries, and personalized exercise suggestions to help correct issues and stay on track.
               </p>
             </div>
           </div>
         </div>
       </section>
+
 
       {/* Footer */}
       <footer className="bg-[#0d3b66] text-white py-16">

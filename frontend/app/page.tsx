@@ -6,7 +6,7 @@ export default function Home() {
   return (
     <div className="min-h-100% flex flex-col bg-gradient-to-br from-[#eaf3fb] via-[#f4faff] to-[#eafaf1] font-sans">
       {/* Navbar/Header */}
-      <header className="w-full flex justify-between items-center px-4 md:px-8 py-4 bg-white/90 backdrop-blur-md shadow-lg border-b border-white/20 relative z-20 sticky top-0">
+      <header className="w-full flex justify-between items-center px-4 md:px-8 py-4 bg-white/90 backdrop-blur-md shadow-lg border-b border-white/20 relative z-20 top-0">
         <div className="flex items-center gap-3">
           <div className="relative">
             <span className="bg-gradient-to-br from-[#27a1ff] to-[#1e90ff] rounded-full w-12 h-12 flex items-center justify-center text-xl font-bold text-white shadow-lg">

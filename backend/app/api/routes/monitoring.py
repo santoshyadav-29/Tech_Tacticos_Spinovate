@@ -2,11 +2,12 @@ from fastapi import APIRouter, Depends, HTTPException
 from app.services.video_stream import VideoStreamService
 from app.models.schemas import MonitoringResponse, SessionReport
 from app.core.exceptions import MonitoringNotActiveException
+from app.api.routes.video import video_stream_service
 
 router = APIRouter()
 
 def get_video_service() -> VideoStreamService:
-    return VideoStreamService()
+    return video_stream_service
 
 @router.post("/start", response_model=MonitoringResponse)
 async def start_monitoring(service: VideoStreamService = Depends(get_video_service)):

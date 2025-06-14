@@ -8,12 +8,34 @@ import { AngleStats } from "@/components/AngleStats";
 import { computeAngles, getFeedback } from "@/app/utils/postureUtils"; // optional: extract these too
 
 export default function PosturePage() {
-  const { videoRef, pitch, distance, videoSrc } = usePostureDetection();
+  const { pitch, distance, postureAngles } = usePostureDetection();
+
+  // Map backend keys to new display names, keeping values the same
+  const angleNameMap: Record<string, string> = {
+    "Degree of Anteversion of Cervical Spine (y1)": "Cervical",
+    "T1 Slope (y2)": "T1Slope",
+    "Upper Thoracic Kyphosis Angle (y3)": "UpperThoracic",
+    "Middle and Lower Thoracic Kyphosis Angle (y4)": "MidLowerThoracic",
+    "T8-T12-L3 Angle (new)": "T8T12L3",
+    "Lumbar Lordosis Angle (y5)": "LumbarLordosis",
+  };
+
+  // Remap postureAngles keys for display
+  const remappedAngles = useMemo(() => {
+    if (!postureAngles) return {};
+    const out: Record<string, number> = {};
+    Object.entries(postureAngles).forEach(([key, value]) => {
+      const mapped = angleNameMap[key] || key;
+      out[mapped] = value;
+    });
+    return out;
+  }, [postureAngles]);
 
   const angles = useMemo(
     () => computeAngles(distance, pitch),
     [distance, pitch]
   );
+
   const feedback = useMemo(
     () => getFeedback(distance, pitch, angles),
     [distance, pitch, angles]
@@ -30,14 +52,9 @@ export default function PosturePage() {
         </span>
       </header>
       <main className="flex-1 flex flex-col md:flex-row gap-8 px-6 py-8 max-w-7xl mx-auto w-full">
-        <VideoCapture
-          videoRef={videoRef}
-          pitch={pitch}
-          distance={distance}
-          videoSrc={videoSrc}
-        />
+        <img src="http://127.0.0.1:8000/video/stream" alt="Live Webcam Feed" width="100%" />
         {/* <StickFigure angles={angles} /> */}
-        <AngleStats angles={angles} />
+        <AngleStats angles={remappedAngles} />
       </main>
 
       <section className="w-full flex justify-center mt-2 mb-8">

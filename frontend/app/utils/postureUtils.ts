@@ -14,12 +14,12 @@ export function computeAngles(
 }
 
 const healthyRanges: Record<string, [number, number]> = {
-  Cervical: [15, 35],
-  T1Slope: [20, 40],
-  UpperThoracic: [120, 150],
-  MidLowerThoracic: [150, 170],
-  T8T12L3: [160, 180],
-  LumbarLordosis: [170, 190],
+  Cervical: [35, 1000],
+  T1Slope: [50, 1000],
+  UpperThoracic: [0, 140],
+  MidLowerThoracic: [156, 1000],
+  T8T12L3: [180, 1800],
+  LumbarLordosis: [174, 1900],
 };
 
 export function getFeedback(

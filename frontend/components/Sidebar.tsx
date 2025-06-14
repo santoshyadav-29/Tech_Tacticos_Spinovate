@@ -74,23 +74,7 @@ const Sidebar = () => {
         </button>
       </div>
 
-      {/* Search bar */}
-      <div className="px-3 mb-4">
-        <div
-          className={`flex items-center bg-white/80 rounded-md px-3 py-2 transition-all duration-300 ${
-            open ? "w-full" : "w-12 mx-auto"
-          }`}
-        >
-          <FiSearch className="text-lg text-[#27a1ff] shrink-0" />
-          <input
-            type="text"
-            placeholder="Search..."
-            className={`bg-transparent outline-none ml-2 text-sm placeholder:text-[#b2b8d6] text-[#0d3b66] transition-all duration-300 ${
-              open ? "w-full opacity-100" : "w-0 opacity-0"
-            }`}
-          />
-        </div>
-      </div>
+      
 
       {/* Navigation links */}
       <nav className="flex-1 flex flex-col gap-1 px-2">

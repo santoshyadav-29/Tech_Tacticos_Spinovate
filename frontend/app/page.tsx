@@ -1,12 +1,35 @@
+"use client"
+
 import Image from "next/image"
 import Link from "next/link"
 import { Zap, Users, Shield, Eye, Activity} from "lucide-react"
+import { use, useEffect } from "react"
+import { useState } from "react"
+
 
 export default function Home() {
+  const [isScrolled, setIsScrolled] = useState(false);
+
+  useEffect(() => {
+    const handleScroll = () => {
+      setIsScrolled(window.scrollY > 10);
+    };
+    window.addEventListener("scroll", handleScroll);
+    return () => {
+      window.removeEventListener("scroll", handleScroll);
+    };
+  }, []);
+
+
+
   return (
-    <div className="min-h-100% flex flex-col bg-gradient-to-br from-[#eaf3fb] via-[#f4faff] to-[#eafaf1] font-sans">
+    <div className="min-h-screen flex flex-col bg-gradient-to-br from-[#eaf3fb] via-[#f4faff] to-[#eafaf1] font-sans">
       {/* Navbar/Header */}
-      <header className="w-full flex justify-between items-center px-4 md:px-8 py-4 border-b border-white/20 relative z-20 sticky top-0">
+      <header
+        className={`w-full flex justify-between items-center px-4 md:px-8 py-4 relative z-20 sticky top-0 transition-colors duration-300 ${
+          isScrolled ? "bg-white shadow-md" : "bg-transparent"
+        }`}
+      >
         <div className="flex items-center gap-3">
           <div className="relative">
             <span className="bg-gradient-to-br from-[#27a1ff] to-[#1e90ff] rounded-full w-12 h-12 flex items-center justify-center text-xl font-bold text-white shadow-lg">
@@ -119,7 +142,8 @@ export default function Home() {
         </div>
 
         {/* Main Content */}
-        <div className="max-w-10xl mx-auto grid lg:grid-cols-[1fr_2fr] gap-40 items-center h-full px-4 py-16 relative z-10">
+        <div className="max-w-10xl mx-auto grid lg:grid-cols-[1fr_2fr] gap-40 items-center h-full
+         px-4 py-16 relative z-10">
           {/* Empty placeholder for left column if needed */}
           <div></div>
 
@@ -218,7 +242,7 @@ export default function Home() {
       </main>
 
        {/* Features Section */}
-      <section id="features" className="py-20 bg-white/50 backdrop-blur-sm">
+      <section id="features" className="py-20 backdrop-blur-sm">
         <div className="max-w-6xl mx-auto px-4">
           <div className="text-center mb-16">
             <h2 className="text-4xl md:text-5xl font-bold text-[#0d3b66] mb-6">What Do We Do?</h2>

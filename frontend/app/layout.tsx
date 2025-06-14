@@ -1,5 +1,7 @@
 import type { Metadata } from "next";
 import "@/app/globals.css";
+
+
 export const metadata: Metadata = {
   title: "Spinovate",
   description: "Spinovate - Want to correct your posture? Spinovate is here to help you with that.",

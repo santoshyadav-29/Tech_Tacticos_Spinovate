@@ -30,6 +30,9 @@ class DrowsinessDetectionService:
         self.posture_angles = PostureAngles()
         self.eye_counter = 0
         self.yawn_counter = 0
+        self.blink_count = 0
+        self.frame_counter = 0
+
     
     def process_frame(
         self, 
@@ -66,7 +69,7 @@ class DrowsinessDetectionService:
             yaw_angle = self._calculate_yaw(landmarks_3d)
             
             # Detect drowsiness and yawning
-            drowsiness_detected, yawn_detected = self._detect_fatigue(ear, mar, yaw_angle)
+            drowsiness_detected, yawn_detected, blink_detected = self._detect_fatigue(ear, mar, yaw_angle)
 
             distance, brightness = self.face_detection_service.detect_face_and_measure_distance(rgb_image, frame)
 
@@ -77,9 +80,9 @@ class DrowsinessDetectionService:
             self._draw_status_table(frame, pitch_angle, ear, mar, yaw_angle, brightness,
                                   drowsiness_detected, yawn_detected, w, h, posture_angles)
             
-            return pitch_angle, ear, mar, yaw_angle, drowsiness_detected, yawn_detected, posture_angles
+            return pitch_angle, ear, mar, yaw_angle, drowsiness_detected, yawn_detected,blink_detected, posture_angles
             
-        return None, None, None, None, False, False
+        return None, None, None, None, False, False, False, None
     
     def _calculate_pitch(self, landmarks, w: int, h: int) -> float:
         """Calculate head pitch angle."""
@@ -113,26 +116,45 @@ class DrowsinessDetectionService:
         yaw_angle_rad = np.arctan2(eye_vector[2], eye_vector[0])
         return np.degrees(yaw_angle_rad)
     
-    def _detect_fatigue(self, ear: float, mar: float, yaw_angle: float) -> Tuple[bool, bool]:
-        """Detect drowsiness and yawning."""
-        # Drowsiness detection
+    def _detect_fatigue(self, ear: float, mar: float, yaw_angle: float) -> Tuple[bool, bool, bool]:
+        """Detect drowsiness, yawning, and blink detection.
+        Returns: (drowsiness_detected, yawn_detected, blink_detected)
+        """
+
+        drowsiness_detected = False
+        blink_detected = False
+
+        # --- Drowsiness detection (long eye closure) ---
         if ear > 0 and ear < settings.EAR_THRESH:
             self.eye_counter += 1
         else:
             self.eye_counter = 0
-            
-        # Yawn detection
+
+        if self.eye_counter >= settings.EAR_CONSEC_FRAMES:
+            drowsiness_detected = True
+
+        # --- Blink detection (short closure) ---
+        if ear > 0 and ear < settings.EAR_THRESH:
+            self.frame_counter += 1
+        else:
+            if 1 <= self.frame_counter < settings.EAR_CONSEC_FRAMES:
+                self.blink_count += 1
+                blink_detected = True
+            self.frame_counter = 0
+
+        # --- Yawn detection ---
         is_frontal = abs(yaw_angle) < settings.YAW_ANGLE_THRESH
-        if ((is_frontal and mar > settings.MAR_THRESH) or 
+        if ((is_frontal and mar > settings.MAR_THRESH) or
             (not is_frontal and mar > settings.MAR_THRESH_NON_FRONTAL)):
             self.yawn_counter += 1
         else:
             self.yawn_counter = 0
-            
-        drowsiness_detected = self.eye_counter >= settings.EAR_CONSEC_FRAMES
+
         yawn_detected = self.yawn_counter >= settings.YAWN_CONSEC_FRAMES
-        
-        return drowsiness_detected, yawn_detected
+
+        return drowsiness_detected, yawn_detected, blink_detected
+
+
     
     def _draw_pitch_line(self, frame: np.ndarray, landmarks, w: int, h: int):
         """Draw line between eyes for pitch visualization."""
@@ -206,7 +228,8 @@ class DrowsinessDetectionService:
             f"EAR: {ear:.2f}",
             f"MAR: {mar:.2f}",
             f"Yaw: {yaw:.1f}",
-            f"Brightness: {brightness:.2f}" if brightness is not None else "Brightness: N/A"
+            f"Brightness: {brightness:.2f}" if brightness is not None else "Brightness: N/A",
+            f"Blinks: {self.blink_count}"
         ]
         
         for metric in metrics:
@@ -240,11 +263,14 @@ class DrowsinessDetectionService:
             )
             row += 1
     
-    def get_counters(self) -> Tuple[int, int]:
-        """Get current eye and yawn counters."""
-        return self.eye_counter, self.yawn_counter
+    def get_counters(self) -> Tuple[int, int, int]:
+        """Return current eye, yawn, and blink counters."""
+        return self.eye_counter, self.yawn_counter, self.blink_count
+
     
     def reset_counters(self):
-        """Reset detection counters."""
+        """Reset all detection counters."""
         self.eye_counter = 0
         self.yawn_counter = 0
+        self.blink_count = 0
+        self.frame_counter = 0

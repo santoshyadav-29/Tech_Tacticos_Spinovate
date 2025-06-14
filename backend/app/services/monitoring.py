@@ -1,8 +1,8 @@
 import time
 from typing import Dict, Any, Optional
 from threading import Lock
-from app.core.config import settings
 from datetime import datetime
+from app.core.config import settings
 
 def format_timestamp(ts: Optional[float]) -> Optional[str]:
     return datetime.fromtimestamp(ts).isoformat() if ts else None
@@ -35,7 +35,7 @@ class MonitoringService:
 
     def update_metrics(self, distance: Optional[float], pitch: Optional[float], 
                        brightness: Optional[float], drowsiness_detected: bool, 
-                       yawn_detected: bool):
+                       yawn_detected: bool, blink_detected: bool):
         if not self.monitoring_active:
             return
 
@@ -53,6 +53,7 @@ class MonitoringService:
                 self._update_brightness_metrics(brightness, elapsed)
                 self._update_posture_metrics(pitch, elapsed)
                 self._update_drowsiness_metrics(drowsiness_detected, yawn_detected, elapsed)
+                self._update_blink_metrics(blink_detected, current_time)
             else:
                 self.monitoring_data["face_missing_time"] += elapsed
 
@@ -110,6 +111,18 @@ class MonitoringService:
         else:
             self.monitoring_data["_yawn_state"] = False
 
+    def _update_blink_metrics(self, blink_detected: bool, current_time: float):
+        if blink_detected:
+            self.monitoring_data["blinks"] += 1
+            last_blink_time = self.monitoring_data["last_blink_time"]
+            if last_blink_time is not None:
+                gap = current_time - last_blink_time
+                if gap > self.monitoring_data["longest_no_blink"]:
+                    self.monitoring_data["longest_no_blink"] = gap
+                if gap > settings.LONG_BLINK_GAP_SEC:
+                    self.monitoring_data["long_blink_gaps"] += 1
+            self.monitoring_data["last_blink_time"] = current_time
+
     def generate_report(self) -> Dict[str, Any]:
         if not self.monitoring_data:
             return {"error": "No session data"}
@@ -127,7 +140,6 @@ class MonitoringService:
             avg_brightness = (self.monitoring_data["brightness_sum"] /
                               self.monitoring_data["frames_with_face"]
                               if self.monitoring_data["frames_with_face"] else 0)
-
             yawns_per_hour = (
                 self.monitoring_data["yawns_detected"] / duration * 3600 
                 if duration else 0
@@ -165,9 +177,12 @@ class MonitoringService:
                 "drowsiness_events_per_hour": round(drowsiness_events_per_hour, 2),
                 "yawns_detected": self.monitoring_data["yawns_detected"],
                 "yawns_per_hour": round(yawns_per_hour, 2),
-                "session_score": score
+                "session_score": score,  
+                "blinks": self.monitoring_data["blinks"],
+                "long_blink_gaps": self.monitoring_data["long_blink_gaps"],
+                "longest_no_blink_sec": round(self.monitoring_data["longest_no_blink"], 2),
             }
-
+        
     def _calculate_session_score(self, duration: float) -> float:
         if duration <= 0:
             return 0.0
@@ -208,6 +223,10 @@ class MonitoringService:
             "_brightness_state": False,
             "_drowsiness_state": False,
             "_yawn_state": False,
+            "blinks": 0,
+            "last_blink_time": None,
+            "long_blink_gaps": 0,
+            "longest_no_blink": 0,
         }
 
     @property

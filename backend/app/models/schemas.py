@@ -44,3 +44,6 @@ class SessionReport(BaseModel):
     yawns_detected: int
     yawns_per_hour: float
     session_score: float
+    blinks: int
+    long_blink_gaps: int
+    longest_no_blink_sec: float

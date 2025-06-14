@@ -65,7 +65,8 @@ class VideoStreamService:
                     processed_data["pitch"], 
                     processed_data["brightness"],
                     processed_data["drowsiness_detected"],
-                    processed_data["yawn_detected"]
+                    processed_data["yawn_detected"],
+                    processed_data["blink_detected"],
                 )
             
             # Handle local display or streaming
@@ -94,7 +95,7 @@ class VideoStreamService:
         data = {
             "distance": None, "pitch": None, "brightness": None,
             "ear": None, "mar": None, "yaw": None,
-            "drowsiness_detected": False, "yawn_detected": False
+            "drowsiness_detected": False, "yawn_detected": False, "blink_detected": False
         }
         
         # Face detection and distance measurement
@@ -104,14 +105,24 @@ class VideoStreamService:
         
         # Drowsiness detection and posture analysis
         pf_result = self.drowsiness_service.process_frame(rgb, frame)
-        if len(pf_result) == 7:
-            pitch, ear, mar, yaw, drowsiness, yawn, posture_angles = pf_result
-        else:
+        # Handle both 6, 7, or 8 return values for backward compatibility
+        if len(pf_result) == 8:
+            pitch, ear, mar, yaw, drowsiness, yawn, blink_detected, posture_angles = pf_result
+        elif len(pf_result) == 7:
+            pitch, ear, mar, yaw, drowsiness, yawn, blink_detected = pf_result
+            posture_angles = None
+        elif len(pf_result) == 6:
             pitch, ear, mar, yaw, drowsiness, yawn = pf_result
+            blink_detected = False
+            posture_angles = None
+        else:
+            # Unexpected output, set all to None/False
+            pitch = ear = mar = yaw = drowsiness = yawn = None
+            blink_detected = False
             posture_angles = None
         data.update({
             "pitch": pitch, "ear": ear, "mar": mar, "yaw": yaw,
-            "drowsiness_detected": drowsiness, "yawn_detected": yawn
+            "drowsiness_detected": drowsiness, "yawn_detected": yawn, "blink_detected": blink_detected
         })
         
         # Update shared data

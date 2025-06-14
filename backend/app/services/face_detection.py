@@ -59,12 +59,6 @@ class FaceDetectionService:
             if face_roi.size > 0:
                 gray = cv2.cvtColor(face_roi, cv2.COLOR_BGR2GRAY)
                 brightness = np.mean(gray)
-                
-                if brightness > settings.BRIGHTNESS_HIGH_THRESHOLD:
-                    cv2.putText(
-                        frame, f"⚠ Brightness Too High! ({brightness:.2f})", 
-                        (30, 80), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 0, 255), 2
-                    )
             
             return distance, brightness
             

@@ -23,6 +23,58 @@ interface AlertData {
 }
 
 export default function PosturePage() {
+
+const videoRef = useRef<HTMLVideoElement | null>(null);
+  // List available video input devices (webcams)
+  const [devices, setDevices] = useState<MediaDeviceInfo[]>([]);
+  const [selectedDeviceId, setSelectedDeviceId] = useState('');
+
+  useEffect(() => {
+    const MY_WEBCAM_ID = 'SplitCam Virtual Camera'; // Replace with your webcam's label
+
+    async function getDevices() {
+      try {
+        const allDevices = await navigator.mediaDevices.enumerateDevices();
+        const videoDevices = allDevices.filter(device => device.kind === 'videoinput');
+        setDevices(videoDevices);
+        // Find device by label (since you know the label)
+        const preferredDevice = videoDevices.find(d => d.label === MY_WEBCAM_ID);
+        setSelectedDeviceId(preferredDevice ? preferredDevice.deviceId : (videoDevices[0]?.deviceId || ''));
+      } catch (err) {
+        console.error('Error listing devices:', err);
+      }
+    }
+    getDevices();
+  }, []);
+
+  useEffect(() => {
+    let stream;
+    async function getWebcam() {
+      if (!selectedDeviceId) return;
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({
+          video: { deviceId: { exact: selectedDeviceId } }
+        });
+        if (videoRef.current) {
+          videoRef.current.srcObject = stream;
+        }
+      } catch (err) {
+        console.error('Error accessing webcam:', err);
+      }
+    }
+    getWebcam();
+    // Cleanup: stop the stream on unmount or device change
+    return () => {
+      if (videoRef.current && videoRef.current.srcObject) {
+        const stream = videoRef.current.srcObject as MediaStream;
+        if (stream && typeof stream.getTracks === "function") {
+          const tracks = stream.getTracks();
+          tracks.forEach(track => track.stop());
+        }
+      }
+    };
+  }, [selectedDeviceId]);
+
   const router = useRouter();
   const [isMonitoring, setIsMonitoring] = useState(() => {
     if (typeof window !== "undefined") {
@@ -571,6 +623,18 @@ export default function PosturePage() {
         {/* Stats Section */}
         {isMonitoring && <AngleStats angles={remappedAngles} />}
       </main>
+
+
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', marginTop: 40, background: '#f0f0f0', padding: 20, borderRadius: 8 }}>
+      <video
+        ref={videoRef}
+        autoPlay
+        playsInline
+        style={{ width: 640, height: 480, background: '#000', borderRadius: 8 }}
+      />
+    </div>
+
+
 
       {/* Feedback Section */}
       {isMonitoring && (

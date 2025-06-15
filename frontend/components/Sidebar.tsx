@@ -53,9 +53,11 @@ const Sidebar = () => {
       {/* Top section with logo and menu button */}
       <div className="flex items-center justify-between px-4 py-5">
         <div className="flex items-center gap-2">
-          <span className="bg-[#27a1ff] rounded-full w-8 h-8 flex items-center justify-center text-lg font-bold text-white shrink-0 hover:scale-110 transition-transform">
-            S
-          </span>
+            <img
+            src="/Logo.png"
+            alt="Spinovate Logo"
+            className="w-8 h-8 rounded-full object-cover shrink-0 hover:scale-110 transition-transform"
+            />
           <span
             className={`text-xl font-bold tracking-wide text-[#0d3b66] transition-all duration-300 ${
               open ? "opacity-100 w-auto" : "opacity-0 w-0 overflow-hidden"

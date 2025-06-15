@@ -32,9 +32,11 @@ export default function Home() {
       >
         <div className="flex items-center gap-3">
           <div className="relative">
-            <span className="bg-gradient-to-br from-[#27a1ff] to-[#1e90ff] rounded-full w-12 h-12 flex items-center justify-center text-xl font-bold text-white shadow-lg">
-              S
-            </span>
+              <img
+            src="/Logo.png"
+            alt="Spinovate Logo"
+            className="w-8 h-8 rounded-full object-cover shrink-0 hover:scale-110 transition-transform"
+            />
             <div className="absolute -top-1 -right-1 w-4 h-4 bg-green-500 rounded-full border-2 border-white animate-pulse"></div>
           </div>
           <div>

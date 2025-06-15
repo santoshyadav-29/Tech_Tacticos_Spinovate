@@ -40,7 +40,7 @@ The Posture Correction System is an innovative tool designed to help users maint
 
 1. The system accesses the webcam feed.
 2. Processes head angle and distance data.
-3. Calculates posture angles in real time.
+3. Calculates posture angles from mathematical model in real time.
 4. Triggers an alert if posture is incorrect.
 
 ## ⚙️ Installation

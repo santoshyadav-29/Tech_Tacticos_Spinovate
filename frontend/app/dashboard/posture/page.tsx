@@ -645,16 +645,25 @@ const videoRef = useRef<HTMLVideoElement | null>(null);
       </main>
 
 
-      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', marginTop: 40, background: '#f0f0f0', padding: 20, borderRadius: 8 }}>
-      <video
-        ref={videoRef}
-        autoPlay
-        playsInline
-        style={{ width: 640, height: 480, background: '#000', borderRadius: 8 }}
-      />
-    </div>
-
-
+      {/* Always render the video, just hide it when not monitoring */}
+      <div
+        style={{
+          display: isMonitoring ? 'flex' : 'none',
+          flexDirection: 'column',
+          alignItems: 'center',
+          marginTop: 40,
+          background: '#f0f0f0',
+          padding: 20,
+          borderRadius: 8,
+        }}
+      >
+        <video
+          ref={videoRef}
+          autoPlay
+          playsInline
+          style={{ width: 640, height: 480, background: '#000', borderRadius: 8 }}
+        />
+      </div>
 
       {/* Feedback Section */}
       {isMonitoring && (

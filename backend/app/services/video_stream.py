@@ -155,8 +155,8 @@ class VideoStreamService:
             blink=bool(blink_detected),
             posture_thresholds=posture_thresholds,
             distance_threshold=settings.GOOD_DISTANCE_MIN,  # Too close if less than min
-            yawn_threshold=3,  # Example: 3 yawns in n seconds
-            blink_threshold=3  # Example: at least 3 blinks in n seconds
+            yawn_threshold=10,  # Example: 3 yawns in n seconds
+            blink_threshold=1  # Example: at least 3 blinks in n seconds
         )
         
         return data

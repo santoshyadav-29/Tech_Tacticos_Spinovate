@@ -8,7 +8,7 @@ class AlertService:
         posture_n_seconds: int = 5,
         multi_posture_n_seconds: int = 5,
         distance_n_seconds: int = 5,
-        yawn_n_seconds: int = 5,
+        yawn_n_seconds: int = 10,
         drowsy_n_seconds: int = 5,
         blink_n_seconds: int = 10
     ):

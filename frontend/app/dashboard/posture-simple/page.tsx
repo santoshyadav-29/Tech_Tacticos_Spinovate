@@ -324,7 +324,7 @@ export default function SimplifiedPosturePage() {
                 Posture Score
               </h2>
               
-              {dashboardData ? (
+              {dashboardData && dashboardData.posture_score ? (
                 <div>
                   {/* Overall Score */}
                   <div className="mb-6">
@@ -339,7 +339,7 @@ export default function SimplifiedPosturePage() {
                             : "text-red-600"
                         }`}
                       >
-                        {dashboardData.posture_score.overall.toFixed(0)}%
+                        {(dashboardData.posture_score.overall ?? 0).toFixed(0)}%
                       </span>
                     </div>
                     <div className="w-full bg-gray-200 rounded-full h-3">
@@ -351,7 +351,7 @@ export default function SimplifiedPosturePage() {
                             ? "bg-yellow-500"
                             : "bg-red-500"
                         }`}
-                        style={{ width: `${dashboardData.posture_score.overall}%` }}
+                        style={{ width: `${dashboardData.posture_score.overall ?? 0}%` }}
                       />
                     </div>
                     <div className="mt-2 text-center">
@@ -375,9 +375,9 @@ export default function SimplifiedPosturePage() {
                       <span className="text-gray-600">Neck Angle</span>
                       <div className="text-right">
                         <span className="font-semibold">
-                          {dashboardData.posture_score.neck.toFixed(0)}%
+                          {(dashboardData.posture_score.neck ?? 0).toFixed(0)}%
                         </span>
-                        {dashboardData.pitch_angle !== undefined && (
+                        {dashboardData.pitch_angle !== undefined && dashboardData.pitch_angle !== null && (
                           <span className="text-xs text-gray-500 ml-2">
                             ({dashboardData.pitch_angle.toFixed(1)}°)
                           </span>
@@ -388,9 +388,9 @@ export default function SimplifiedPosturePage() {
                       <span className="text-gray-600">Head Tilt</span>
                       <div className="text-right">
                         <span className="font-semibold">
-                          {dashboardData.posture_score.roll.toFixed(0)}%
+                          {(dashboardData.posture_score.roll ?? 0).toFixed(0)}%
                         </span>
-                        {dashboardData.roll_angle !== undefined && (
+                        {dashboardData.roll_angle !== undefined && dashboardData.roll_angle !== null && (
                           <span className="text-xs text-gray-500 ml-2">
                             ({Math.abs(dashboardData.roll_angle).toFixed(1)}°)
                           </span>
@@ -401,9 +401,9 @@ export default function SimplifiedPosturePage() {
                       <span className="text-gray-600">Distance</span>
                       <div className="text-right">
                         <span className="font-semibold">
-                          {dashboardData.posture_score.distance.toFixed(0)}%
+                          {(dashboardData.posture_score.distance ?? 0).toFixed(0)}%
                         </span>
-                        {dashboardData.distance !== undefined && (
+                        {dashboardData.distance !== undefined && dashboardData.distance !== null && (
                           <span className="text-xs text-gray-500 ml-2">
                             ({dashboardData.distance.toFixed(0)}cm)
                           </span>
@@ -426,24 +426,24 @@ export default function SimplifiedPosturePage() {
                 Eye Wellness
               </h2>
               
-              {dashboardData ? (
+              {dashboardData && dashboardData.blink_detection ? (
                 <div className="grid grid-cols-2 gap-4">
                   <div className="text-center p-4 bg-purple-50 rounded-xl">
                     <div className="text-3xl font-bold text-purple-600">
-                      {dashboardData.blink_detection.blink_rate.toFixed(1)}
+                      {(dashboardData.blink_detection.blink_rate ?? 0).toFixed(1)}
                     </div>
                     <div className="text-sm text-gray-600 mt-1">Blinks/min</div>
                     <div className="text-xs text-gray-500 mt-1">
-                      {dashboardData.blink_detection.blink_rate < 10
+                      {(dashboardData.blink_detection.blink_rate ?? 0) < 10
                         ? "⚠️ Low"
-                        : dashboardData.blink_detection.blink_rate < 20
+                        : (dashboardData.blink_detection.blink_rate ?? 0) < 20
                         ? "✓ Normal"
                         : "✓ Good"}
                     </div>
                   </div>
                   <div className="text-center p-4 bg-blue-50 rounded-xl">
                     <div className="text-3xl font-bold text-blue-600">
-                      {dashboardData.blink_detection.blink_count}
+                      {dashboardData.blink_detection.blink_count ?? 0}
                     </div>
                     <div className="text-sm text-gray-600 mt-1">Total Blinks</div>
                     <div className="text-xs text-gray-500 mt-1">This session</div>

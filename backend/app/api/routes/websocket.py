@@ -10,7 +10,7 @@ import json
 import time
 from typing import Dict, Optional
 from app.services.drowsiness_detection import DrowsinessDetectionService
-from app.services.calibration_service import calibration_service
+from app.services.calibration_service_db import calibration_service_db as calibration_service
 from app.models.schemas import PostureScore, BlinkDetection, MinimalDashboardResponse, UserThresholds
 
 router = APIRouter()

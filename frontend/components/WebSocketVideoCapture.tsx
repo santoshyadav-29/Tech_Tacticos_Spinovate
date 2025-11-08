@@ -137,7 +137,7 @@ export const VideoCapture: React.FC<Props> = ({ userId, onDataUpdate, isActive =
           
           // Handle error messages from server
           if (data.error) {
-            console.warn("Server error:", data);
+            console.warn("Server error:", data.error);
             return;
           }
           
@@ -145,14 +145,21 @@ export const VideoCapture: React.FC<Props> = ({ userId, onDataUpdate, isActive =
           if (data.status === 'no_face') {
             // Still connected, just no face detected
             console.log("No face detected in frame");
+            // Clear dashboard data to show "looking for face" message
+            setDashboardData(null);
             return;
           }
           
-          // Valid data received
-          console.log("Received data from WebSocket:", data);
-          setDashboardData(data);
-          if (onDataUpdate) {
-            onDataUpdate(data);
+          // Validate data has required fields before using
+          if (data.posture_score && data.blink_detection) {
+            console.log("Received valid data from WebSocket");
+            setDashboardData(data);
+            if (onDataUpdate) {
+              onDataUpdate(data);
+            }
+          } else {
+            console.log("Received incomplete data, waiting for face detection...");
+            setDashboardData(null);
           }
         } catch (err) {
           console.error("Failed to parse WebSocket message:", err);
@@ -160,9 +167,11 @@ export const VideoCapture: React.FC<Props> = ({ userId, onDataUpdate, isActive =
       };
 
       ws.onerror = (error) => {
-        console.error("❌ WebSocket error:", error);
-        console.error("WebSocket URL was:", wsUrl);
-        setError(`Cannot connect to backend at ${host}. Make sure the server is running.`);
+        console.error("WebSocket connection error. URL:", wsUrl);
+        // Only set error if we're actually trying to connect (not during cleanup)
+        if (isActive) {
+          setError(`Cannot connect to backend at ${host}. Make sure the server is running.`);
+        }
       };
 
       ws.onclose = (event) => {
@@ -366,13 +375,13 @@ export const VideoCapture: React.FC<Props> = ({ userId, onDataUpdate, isActive =
       </div>
 
       {/* Real-time Metrics */}
-      {dashboardData && (
+      {dashboardData && dashboardData.posture_score && dashboardData.blink_detection && (
         <div className="mt-4 bg-white rounded-xl shadow px-6 py-4 w-full max-w-md">
           <div className="grid grid-cols-2 gap-4">
             <div>
               <div className="text-sm text-gray-600">Posture Score</div>
               <div className="text-2xl font-bold text-blue-600">
-                {dashboardData.posture_score.overall.toFixed(0)}%
+                {(dashboardData.posture_score.overall ?? 0).toFixed(0)}%
               </div>
               <div
                 className={`text-xs font-semibold uppercase ${
@@ -389,7 +398,7 @@ export const VideoCapture: React.FC<Props> = ({ userId, onDataUpdate, isActive =
             <div>
               <div className="text-sm text-gray-600">Blink Rate</div>
               <div className="text-2xl font-bold text-purple-600">
-                {dashboardData.blink_detection.blink_rate.toFixed(1)}
+                {(dashboardData.blink_detection.blink_rate ?? 0).toFixed(1)}
               </div>
               <div className="text-xs text-gray-500">per minute</div>
             </div>
@@ -401,6 +410,16 @@ export const VideoCapture: React.FC<Props> = ({ userId, onDataUpdate, isActive =
               ⚠️ {dashboardData.alert}
             </div>
           )}
+        </div>
+      )}
+      
+      {/* No Face Detected Message */}
+      {!dashboardData && isConnected && isCameraActive && (
+        <div className="mt-4 bg-blue-50 rounded-xl shadow px-6 py-4 w-full max-w-md text-center">
+          <div className="text-blue-600 font-semibold mb-2">👤 Looking for your face...</div>
+          <div className="text-sm text-blue-700">
+            Position yourself in the center of the camera frame
+          </div>
         </div>
       )}
     </div>

@@ -4,7 +4,7 @@ Calibration API endpoints for personalized posture detection.
 
 from fastapi import APIRouter, HTTPException
 from typing import Optional
-from app.services.calibration_service import calibration_service
+from app.services.calibration_service_db import calibration_service_db as calibration_service
 from app.models.schemas import UserThresholds
 from pydantic import BaseModel
 

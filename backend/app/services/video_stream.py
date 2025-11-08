@@ -8,6 +8,7 @@ from app.services.face_detection import FaceDetectionService
 from app.services.drowsiness_detection import DrowsinessDetectionService
 from app.services.monitoring import MonitoringService
 from app.services.alert_service import AlertService
+from app.services.calibration_service import calibration_service
 
 class VideoStreamService:
     """Service for video streaming and processing."""
@@ -24,6 +25,7 @@ class VideoStreamService:
         }
         self.lock = threading.Lock()
         self.camera_initialized = False  # For lazy initialization
+        self.current_user_id: Optional[str] = None  # Track current user for thresholds
     
     def _initialize_camera(self):
         """Initialize camera capture."""
@@ -42,8 +44,16 @@ class VideoStreamService:
             self.cap = None
             self.camera_initialized = False
     
-    def generate_frames(self, local: bool = False) -> Generator[bytes, None, None]:
+    def set_user(self, user_id: str):
+        """Set the current user for personalized thresholds."""
+        self.current_user_id = user_id
+        print(f"Video stream service set to user: {user_id}")
+    
+    def generate_frames(self, local: bool = False, user_id: Optional[str] = None) -> Generator[bytes, None, None]:
         """Generate video frames with computer vision processing."""
+        if user_id:
+            self.set_user(user_id)
+        
         self._initialize_camera()
         frame_interval = 1.0 / settings.VIDEO_FPS
         
@@ -138,7 +148,18 @@ class VideoStreamService:
                 "yaw": round(yaw, 2) if yaw else None,
                 "posture_angles": posture_angles if posture_angles else None
             })
-        # Alert logic
+        
+        # Get calibrated thresholds for current user
+        if self.current_user_id:
+            user_thresholds = calibration_service.get_user_thresholds(self.current_user_id)
+            distance_threshold = user_thresholds.distance_min
+            print(f"Using calibrated thresholds for {self.current_user_id}: distance_min={user_thresholds.distance_min}, distance_max={user_thresholds.distance_max}, pitch={user_thresholds.pitch_threshold}")
+        else:
+            distance_threshold = settings.GOOD_DISTANCE_MIN
+            print(f"WARNING: No user_id set, using default thresholds")
+        
+        # Alert logic - use hardcoded posture angle thresholds for now
+        # TODO: These should also be calibrated per user
         posture_thresholds = {
             "Degree of Anteversion of Cervical Spine (y1)": (25, 34),
             "T1 Slope (y2)": (30, 50),
@@ -154,7 +175,7 @@ class VideoStreamService:
             drowsy=bool(drowsiness),
             blink=bool(blink_detected),
             posture_thresholds=posture_thresholds,
-            distance_threshold=settings.GOOD_DISTANCE_MIN,  # Too close if less than min
+            distance_threshold=distance_threshold,  # Use calibrated threshold
             yawn_threshold=10,  # Example: 3 yawns in n seconds
             blink_threshold=1  # Example: at least 3 blinks in n seconds
         )

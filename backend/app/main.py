@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from app.api.routes import video, monitoring, health, alerts
+from app.api.routes import video, monitoring, health, alerts, calibration, websocket
 from app.core.config import settings
 
 def create_application() -> FastAPI:
@@ -26,6 +26,8 @@ def create_application() -> FastAPI:
     application.include_router(video.router, prefix="/video", tags=["video"])
     application.include_router(monitoring.router, prefix="/monitoring", tags=["monitoring"])
     application.include_router(alerts.router, prefix="/alerts", tags=["alerts"])
+    application.include_router(calibration.router, prefix="/calibration", tags=["calibration"])
+    application.include_router(websocket.router, tags=["websocket"])
 
     return application
 

@@ -1,5 +1,6 @@
-from typing import Optional
+from typing import Optional, Dict
 from pydantic import BaseModel
+from datetime import datetime
 
 class FaceMetrics(BaseModel):
     distance: Optional[float] = None
@@ -47,3 +48,51 @@ class SessionReport(BaseModel):
     blinks: int
     long_blink_gaps: int
     longest_no_blink_sec: float
+# Calibration Models
+class CalibrationData(BaseModel):
+    user_id: str
+    scenario: str  # e.g., 'good_posture', 'neutral', 'looking_down'
+    pitch_angle: Optional[float] = None
+    distance: Optional[float] = None
+    ear: Optional[float] = None
+    timestamp: datetime = datetime.now()
+
+class UserThresholds(BaseModel):
+    user_id: str
+    pitch_threshold: float = 15.0
+    distance_min: float = 40.0
+    distance_max: float = 60.0
+    ear_threshold: float = 0.23
+    mar_threshold: float = 0.75
+    calibrated: bool = False
+    calibration_scenarios: Dict[str, CalibrationData] = {}
+
+# Minimal Dashboard Models
+class PostureScore(BaseModel):
+    overall: float  # 0-100
+    neck: float
+    distance: float
+    status: str  # 'good', 'warning', 'poor'
+
+class BlinkDetection(BaseModel):
+    blink_detected: bool
+    blink_count: int
+    blink_rate: float  # blinks per minute
+    ear_value: Optional[float] = None
+
+class MinimalDashboardResponse(BaseModel):
+    posture_score: PostureScore
+    blink_detection: BlinkDetection
+    alert: Optional[str] = None
+    timestamp: float
+    posture_angles: Optional[dict] = None
+    # Raw metrics for calibration
+    pitch_angle: Optional[float] = None
+    distance: Optional[float] = None
+    ear_value: Optional[float] = None
+
+# WebSocket Frame Model
+class VideoFrame(BaseModel):
+    user_id: str
+    frame: str  # base64 encoded image
+    timestamp: float

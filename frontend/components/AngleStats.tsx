@@ -28,23 +28,30 @@ export const AngleStats = ({ angles }: { angles: Record<string, number> }) => (
     <div className="w-full max-w-xs bg-white rounded-2xl shadow-lg px-6 py-6">
       <h2 className="text-xl font-bold mb-4 text-blue-900 text-center">Vertebrae Angles</h2>
       <div className="flex flex-col gap-3">
-        {vertebraKeys.map(({ key, label }) => (
-          <div
-            key={key}
-            className={`flex items-center justify-between px-3 py-2 rounded-lg shadow ${
-              isHealthy(key, angles[key]) ? "bg-green-50" : "bg-red-50"
-            }`}
-          >
-            <span className="font-semibold text-gray-700">{label}</span>
-            <span
-              className={`font-bold text-lg ${
-                isHealthy(key, angles[key]) ? "text-green-600" : "text-red-600"
+        {vertebraKeys.map(({ key, label }) => {
+          const angleValue = angles[key]
+          const hasValue = typeof angleValue === 'number' && Number.isFinite(angleValue)
+          const displayValue = hasValue ? angleValue : 0
+          const isHealthyValue = hasValue ? isHealthy(key, angleValue) : false
+          
+          return (
+            <div
+              key={key}
+              className={`flex items-center justify-between px-3 py-2 rounded-lg shadow ${
+                isHealthyValue ? "bg-green-50" : "bg-red-50"
               }`}
             >
-              {angles[key].toFixed(1)}°
-            </span>
-          </div>
-        ))}
+              <span className="font-semibold text-gray-700">{label}</span>
+              <span
+                className={`font-bold text-lg ${
+                  isHealthyValue ? "text-green-600" : "text-red-600"
+                } ${!hasValue ? "opacity-50" : ""}`}
+              >
+                {displayValue.toFixed(1)}°
+              </span>
+            </div>
+          )
+        })}
       </div>
     </div>
   </section>

@@ -1,8 +1,9 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 from fastapi.responses import StreamingResponse
 from app.services.video_stream import VideoStreamService
 from app.models.schemas import FaceMetrics, DrowsinessStatus
 from app.services.stream_window import stream_window
+from typing import Optional
 
 router = APIRouter()
 
@@ -13,10 +14,17 @@ def get_video_service() -> VideoStreamService:
     return video_stream_service
 
 @router.get("/stream")
-async def video_feed(service: VideoStreamService = Depends(get_video_service)):
-    """Stream video feed with computer vision processing."""
+async def video_feed(
+    user_id: Optional[str] = Query(None, description="User ID for personalized thresholds"),
+    service: VideoStreamService = Depends(get_video_service)
+):
+    """Stream video feed with computer vision processing.
+    
+    Args:
+        user_id: Optional user ID to use calibrated thresholds for that user
+    """
     return StreamingResponse(
-        service.generate_frames(),
+        service.generate_frames(user_id=user_id),
         media_type="multipart/x-mixed-replace; boundary=frame"
     )
 

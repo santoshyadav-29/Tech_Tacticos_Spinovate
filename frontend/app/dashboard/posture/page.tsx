@@ -1,6 +1,5 @@
 "use client"
 import { useEffect, useMemo, useState, useRef } from "react"
-import { usePostureDetection } from "@/app/hooks/usePostureDetection"
 import { AngleStats } from "@/components/AngleStats"
 import { computeAngles, getFeedback } from "@/app/utils/postureUtils"
 import { startMonitoring, stopCamera, stopMonitoring, useMonitoringReport } from "@/app/hooks/monitoringReportSection"
@@ -17,56 +16,20 @@ interface AlertData {
 }
 
 export default function PosturePage() {
-  const videoRef = useRef<HTMLVideoElement | null>(null)
-  // List available video input devices (webcams)
-  const [devices, setDevices] = useState<MediaDeviceInfo[]>([])
-  const [selectedDeviceId, setSelectedDeviceId] = useState("")
-
+  
+  // Generate or load user ID
+  const [userId, setUserId] = useState<string>("")
+  
   useEffect(() => {
-    const MY_WEBCAM_ID = "SplitCam Virtual Camera" // Replace with your webcam's label
-
-    async function getDevices() {
-      try {
-        const allDevices = await navigator.mediaDevices.enumerateDevices()
-        const videoDevices = allDevices.filter((device) => device.kind === "videoinput")
-        setDevices(videoDevices)
-        // Find device by label (since you know the label)
-        const preferredDevice = videoDevices.find((d) => d.label === MY_WEBCAM_ID)
-        setSelectedDeviceId(preferredDevice ? preferredDevice.deviceId : videoDevices[0]?.deviceId || "")
-      } catch (err) {
-        console.error("Error listing devices:", err)
-      }
+    const storedUserId = localStorage.getItem("spinovate_user_id")
+    if (storedUserId) {
+      setUserId(storedUserId)
+    } else {
+      const newUserId = `user_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+      localStorage.setItem("spinovate_user_id", newUserId)
+      setUserId(newUserId)
     }
-    getDevices()
   }, [])
-
-  useEffect(() => {
-    let stream
-    async function getWebcam() {
-      if (!selectedDeviceId) return
-      try {
-        stream = await navigator.mediaDevices.getUserMedia({
-          video: { deviceId: { exact: selectedDeviceId } },
-        })
-        if (videoRef.current) {
-          videoRef.current.srcObject = stream
-        }
-      } catch (err) {
-        console.error("Error accessing webcam:", err)
-      }
-    }
-    getWebcam()
-    // Cleanup: stop the stream on unmount or device change
-    return () => {
-      if (videoRef.current && videoRef.current.srcObject) {
-        const stream = videoRef.current.srcObject as MediaStream
-        if (stream && typeof stream.getTracks === "function") {
-          const tracks = stream.getTracks()
-          tracks.forEach((track) => track.stop())
-        }
-      }
-    }
-  }, [selectedDeviceId])
 
   const router = useRouter()
   const [isMonitoring, setIsMonitoring] = useState(() => {
@@ -103,7 +66,13 @@ export default function PosturePage() {
 
   // Use the monitoring report hook to fetch data
   const report = useMonitoringReport(isMonitoring, 2000)
-  const { pitch, distance, postureAngles } = usePostureDetection(isMonitoring)
+  
+  // Extract pitch and distance from monitoring report
+  const pitch = report?.avg_pitch_deg ?? 0
+  const distance = report?.avg_distance_cm ?? 50
+  
+  // Posture angles - not available from this endpoint
+  const postureAngles = null
 
   const angleNameMap: Record<string, string> = {
     "Degree of Anteversion of Cervical Spine (y1)": "Cervical",
@@ -119,7 +88,9 @@ export default function PosturePage() {
     const out: Record<string, number> = {}
     Object.entries(postureAngles).forEach(([key, value]) => {
       const mapped = angleNameMap[key] || key
-      out[mapped] = value
+      if (typeof value === 'number') {
+        out[mapped] = value
+      }
     })
     return out
   }, [postureAngles])
@@ -609,18 +580,16 @@ export default function PosturePage() {
           <h2 className="text-xl font-semibold text-gray-800 mb-4">Live Feed</h2>
           {isMonitoring ? (
             <div className="relative">
-              <img
-                src="http://127.0.0.1:8000/video/stream"
-                alt="Live Webcam Feed"
-                className="w-full h-auto rounded-lg shadow-sm"
+              {/* OpenCV Annotated Video Stream from Backend with calibrated thresholds */}
+              <img 
+                src={`http://127.0.0.1:8000/video/stream?user_id=${userId}`}
+                alt="Posture Monitoring Stream"
+                className="w-full h-auto rounded-lg"
               />
-              <div className="absolute top-4 right-4 bg-red-500 text-white px-3 py-1 rounded-full text-sm font-medium flex items-center gap-2">
-                <div className="w-2 h-2 bg-white rounded-full animate-pulse"></div>
-                LIVE
-              </div>
+              
               {/* Audio Queue Indicator */}
               {audioQueue.current.length > 0 && (
-                <div className="absolute top-16 left-4 bg-blue-500 text-white px-2 py-1 rounded-full text-xs font-medium">
+                <div className="absolute top-16 left-4 bg-blue-500 text-white px-2 py-1 rounded-full text-xs font-medium z-10">
                   🔊 {audioQueue.current.length}
                 </div>
               )}
@@ -632,7 +601,7 @@ export default function PosturePage() {
 
                 return (
                   criticalAlerts.length > 0 && (
-                    <div className="absolute bottom-4 left-4 right-4">
+                    <div className="absolute bottom-4 left-4 right-4 z-10">
                       <div className="bg-red-900 bg-opacity-90 text-white p-3 rounded-lg border-2 border-red-500">
                         <div className="text-sm font-bold mb-2 flex items-center gap-2">
                           🚨 CRITICAL ALERTS
@@ -679,26 +648,6 @@ export default function PosturePage() {
         {/* Stats Section */}
         {isMonitoring && <AngleStats angles={remappedAngles} />}
       </main>
-
-      {/* Always render the video, just hide it when not monitoring */}
-      <div
-        style={{
-          display: isMonitoring ? "flex" : "none",
-          flexDirection: "column",
-          alignItems: "center",
-          marginTop: 40,
-          background: "#f0f0f0",
-          padding: 20,
-          borderRadius: 8,
-        }}
-      >
-        <video
-          ref={videoRef}
-          autoPlay
-          playsInline
-          style={{ width: 640, height: 480, background: "#000", borderRadius: 8 }}
-        />
-      </div>
 
       {/* Feedback Section */}
       {isMonitoring && (

@@ -54,10 +54,17 @@ export default function Home() {
               <span className="absolute -bottom-1 left-0 w-0 h-0.5 bg-blue-600 transition-all duration-200 group-hover:w-full"></span>
             </Link>
             <Link
-              href="/dashboard/posture"
+              href="/dashboard/posture-simple"
               className="text-[#0d3b66] font-medium hover:text-blue-600 transition-colors duration-200 relative group"
             >
-              Posture Detection
+              Posture Monitoring
+              <span className="absolute -bottom-1 left-0 w-0 h-0.5 bg-blue-600 transition-all duration-200 group-hover:w-full"></span>
+            </Link>
+            <Link
+              href="/dashboard/calibration"
+              className="text-[#0d3b66] font-medium hover:text-blue-600 transition-colors duration-200 relative group"
+            >
+              Calibration
               <span className="absolute -bottom-1 left-0 w-0 h-0.5 bg-blue-600 transition-all duration-200 group-hover:w-full"></span>
             </Link>
             <Link
@@ -74,7 +81,7 @@ export default function Home() {
           <div className="flex items-center gap-3">
            
             <Link
-              href="/dashboard/posture"
+              href="/dashboard/posture-simple"
               className="px-6 py-2 bg-gradient-to-r from-blue-600 to-blue-700 text-white font-semibold rounded-lg shadow-md hover:shadow-lg hover:from-blue-700 hover:to-blue-800 transition-all duration-200 transform hover:-translate-y-0.5"
             >
               Get Started

@@ -40,7 +40,13 @@ const CircularProgress = ({
 }: CircularProgressProps) => {
   const radius = (size - strokeWidth) / 2
   const circumference = 2 * Math.PI * radius
-  const offset = circumference - (percentage / 100) * circumference
+
+  // Ensure percentage is a finite number and clamp between 0 and 100
+  const safePercentage = Number.isFinite(percentage) ? Math.max(0, Math.min(100, percentage)) : 0
+  const offset = circumference - (safePercentage / 100) * circumference
+  // Cast to string for SVG attributes to avoid React warning when value is NaN
+  const strokeDasharrayValue = String(circumference)
+  const strokeDashoffsetValue = String(offset)
   const gradientId = `gradient-${Math.random().toString(36).substr(2, 9)}`
 
   return (
@@ -62,8 +68,8 @@ const CircularProgress = ({
           cy={size / 2}
           r={radius}
           strokeWidth={strokeWidth}
-          strokeDasharray={circumference}
-          strokeDashoffset={offset}
+          strokeDasharray={strokeDasharrayValue}
+          strokeDashoffset={strokeDashoffsetValue}
           strokeLinecap="round"
           style={{
             transition: "stroke-dashoffset 1.5s cubic-bezier(0.4, 0, 0.2, 1)",

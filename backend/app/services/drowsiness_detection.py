@@ -38,18 +38,18 @@ class DrowsinessDetectionService:
         self, 
         rgb_image: np.ndarray, 
         frame: np.ndarray
-    ) -> Tuple[Optional[float], Optional[float], Optional[float], Optional[float], bool, bool, Optional[dict]]:
+    ) -> Tuple[Optional[float], Optional[float], Optional[float], Optional[float], Optional[float], bool, bool, bool, Optional[dict]]:
         """
         Process frame for drowsiness detection and posture analysis.
         
         Returns:
-            Tuple of (pitch_angle, ear, mar, yaw_angle, drowsiness_detected, yawn_detected)
+            Tuple of (pitch_angle, ear, mar, yaw_angle, roll_angle, drowsiness_detected, yawn_detected, blink_detected, posture_angles)
         """
         h, w = frame.shape[:2]
         results = self.face_mesh.process(rgb_image)
         
         if not results.multi_face_landmarks:
-            return None, None, None, None, False, False
+            return None, None, None, None, None, False, False, False, None
             
         for face_landmarks in results.multi_face_landmarks:
             lm = face_landmarks.landmark
@@ -58,15 +58,14 @@ class DrowsinessDetectionService:
             landmarks_2d = [(int(pt.x * w), int(pt.y * h)) for pt in lm]
             landmarks_3d = [(pt.x * w, pt.y * h, pt.z * w) for pt in lm]
             
-            # Calculate pitch
+            # Calculate head angles
             pitch_angle = self._calculate_pitch(lm, w, h)
+            yaw_angle = self._calculate_yaw(landmarks_3d)
+            roll_angle = self._calculate_roll(lm, w, h)  # NEW: Side-to-side tilt
             
             # Calculate EAR and MAR
             ear = self._calculate_ear(landmarks_2d)
             mar = self._calculate_mar(landmarks_2d)
-            
-            # Calculate yaw
-            yaw_angle = self._calculate_yaw(landmarks_3d)
             
             # Detect drowsiness and yawning
             drowsiness_detected, yawn_detected, blink_detected = self._detect_fatigue(ear, mar, yaw_angle)
@@ -77,12 +76,12 @@ class DrowsinessDetectionService:
             
             # Draw visualizations
             self._draw_pitch_line(frame, lm, w, h)
-            self._draw_status_table(frame, pitch_angle, ear, mar, yaw_angle, brightness,
+            self._draw_status_table(frame, pitch_angle, ear, mar, yaw_angle, roll_angle, brightness,
                                   drowsiness_detected, yawn_detected, w, h, posture_angles)
             
-            return pitch_angle, ear, mar, yaw_angle, drowsiness_detected, yawn_detected,blink_detected, posture_angles
+            return pitch_angle, ear, mar, yaw_angle, roll_angle, drowsiness_detected, yawn_detected, blink_detected, posture_angles
             
-        return None, None, None, None, False, False, False, None
+        return None, None, None, None, None, False, False, False, None
     
     def _calculate_pitch(self, landmarks, w: int, h: int) -> float:
         """Calculate head pitch angle."""
@@ -115,6 +114,30 @@ class DrowsinessDetectionService:
         eye_vector = right_eye_outer_3d - left_eye_outer_3d
         yaw_angle_rad = np.arctan2(eye_vector[2], eye_vector[0])
         return np.degrees(yaw_angle_rad)
+    
+    def _calculate_roll(self, landmarks, w: int, h: int) -> float:
+        """
+        Calculate head roll angle (side-to-side tilt).
+        
+        Uses the angle between the line connecting the eyes and the horizontal plane.
+        Positive = tilting right, Negative = tilting left
+        
+        Returns:
+            Roll angle in degrees (-180 to 180)
+        """
+        # Get left and right eye positions (outer corners)
+        left_eye = landmarks_to_3d(landmarks, 33, w, h)  # Left eye outer corner
+        right_eye = landmarks_to_3d(landmarks, 263, w, h)  # Right eye outer corner
+        
+        # Calculate the angle between the eye line and horizontal
+        delta_y = right_eye[1] - left_eye[1]  # Vertical difference
+        delta_x = right_eye[0] - left_eye[0]  # Horizontal difference
+        
+        # Calculate roll angle using arctangent
+        roll_angle_rad = np.arctan2(delta_y, delta_x)
+        roll_angle_deg = np.degrees(roll_angle_rad)
+        
+        return roll_angle_deg
     
     def _detect_fatigue(self, ear: float, mar: float, yaw_angle: float) -> Tuple[bool, bool, bool]:
         """Detect drowsiness, yawning, and blink detection.
@@ -164,12 +187,12 @@ class DrowsinessDetectionService:
                 (int(right_eye[0]), int(right_eye[1])), (0, 255, 255), 1)
     
     def _draw_status_table(self, frame: np.ndarray, pitch: float, ear: float, 
-                          mar: float, yaw: float, brightness: float, drowsiness: bool, yawn: bool,
+                          mar: float, yaw: float, roll: float, brightness: float, drowsiness: bool, yawn: bool,
                           w: int, h: int, posture_angles: dict):
         """Draw status table on frame."""
         # Table configuration
         table_width = 600
-        table_height = 6 * 20 + 18
+        table_height = 7 * 20 + 18  # Increased for roll angle row
         table_x = w - table_width - 20
         table_y = h - table_height - 20
         row_height = 20
@@ -225,9 +248,10 @@ class DrowsinessDetectionService:
         row = 1
         metrics = [
             f"Pitch: {pitch:.2f} deg",
+            f"Roll: {roll:.2f} deg",  # NEW: Head tilt side-to-side
+            f"Yaw: {yaw:.1f} deg",
             f"EAR: {ear:.2f}",
             f"MAR: {mar:.2f}",
-            f"Yaw: {yaw:.1f}",
             f"Brightness: {brightness:.2f}" if brightness is not None else "Brightness: N/A",
             f"Blinks: {self.blink_count}"
         ]

@@ -14,6 +14,7 @@ router = APIRouter()
 class CaptureRequest(BaseModel):
     """Request model for capturing calibration data."""
     pitch_angle: Optional[float] = None
+    roll_angle: Optional[float] = None
     distance: Optional[float] = None
     ear: Optional[float] = None
 
@@ -74,12 +75,13 @@ async def capture_calibration(
             detail=f"Invalid scenario. Must be one of: {', '.join(valid_scenarios)}"
         )
     
-    print(f"CALIBRATION CAPTURE: scenario={scenario}, pitch_angle={data.pitch_angle}, distance={data.distance}, ear={data.ear}")
+    print(f"CALIBRATION CAPTURE: scenario={scenario}, pitch_angle={data.pitch_angle}, roll_angle={data.roll_angle}, distance={data.distance}, ear={data.ear}")
     
     result = calibration_service.store_calibration_frame(
         user_id=user_id,
         scenario=scenario,
         pitch_angle=data.pitch_angle,
+        roll_angle=data.roll_angle,
         distance=data.distance,
         ear=data.ear
     )

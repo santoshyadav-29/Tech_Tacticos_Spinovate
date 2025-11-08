@@ -1,8 +1,9 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { Activity, Eye, TrendingUp } from "lucide-react";
 import { useRouter } from "next/navigation";
+import { VideoCapture } from "@/components/WebSocketVideoCapture";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000";
 
@@ -10,6 +11,7 @@ interface DashboardData {
   posture_score: {
     overall: number;
     neck: number;
+    roll: number;
     distance: number;
     status: string;
   };
@@ -24,8 +26,26 @@ interface DashboardData {
   posture_angles?: Record<string, number>;
   // Raw metrics
   pitch_angle?: number;
+  roll_angle?: number;
   distance?: number;
   ear_value?: number;
+}
+
+interface SessionStats {
+  duration: number;
+  avgPostureScore: number;
+  avgNeckScore: number;
+  avgRollScore: number;
+  avgDistanceScore: number;
+  totalBlinks: number;
+  avgBlinkRate: number;
+  alertsCount: number;
+  poorPostureTime: number;
+  goodPostureTime: number;
+  maxPostureScore: number;
+  minPostureScore: number;
+  startTime: string;
+  endTime: string;
 }
 
 export default function SimplifiedPosturePage() {
@@ -36,7 +56,11 @@ export default function SimplifiedPosturePage() {
   const [sessionStartTime, setSessionStartTime] = useState<Date | null>(null);
   const [isMonitoring, setIsMonitoring] = useState(false);
   const [lastUpdate, setLastUpdate] = useState<Date | null>(null);
-  const pollingIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const [cameraError, setCameraError] = useState<string | null>(null);
+  
+  // Session tracking
+  const sessionDataRef = useRef<DashboardData[]>([]);
+  const alertCountRef = useRef<number>(0);
 
   // Generate or retrieve user ID
   useEffect(() => {
@@ -47,91 +71,58 @@ export default function SimplifiedPosturePage() {
     }
     setUserId(storedUserId);
 
-    // Check if user is calibrated
-    const calibrated = localStorage.getItem("is_calibrated") === "true";
-    setIsCalibrated(calibrated);
-
     // Set session start time
     setSessionStartTime(new Date());
-  }, []);
 
-  // Poll for metrics when monitoring
-  useEffect(() => {
-    if (isMonitoring) {
-      console.log("Starting metrics polling...");
-      
-      // Poll metrics endpoint
-      pollingIntervalRef.current = setInterval(async () => {
-        try {
-          const response = await fetch(`${API_URL}/video/metrics`);
-          if (response.ok) {
-            const data = await response.json();
-            console.log("Received metrics:", data);
-            
-            // Create dashboard data from FaceMetrics
-            // Since FaceMetrics doesn't have scores, we'll calculate simple ones
-            const pitchScore = data.pitch !== null && data.pitch !== undefined 
-              ? Math.max(0, 100 - Math.abs(data.pitch) * 2) 
-              : 0;
-            
-            const distanceScore = data.distance !== null && data.distance !== undefined
-              ? (data.distance >= 40 && data.distance <= 70 ? 100 : Math.max(0, 100 - Math.abs(data.distance - 55) * 3))
-              : 0;
-            
-            const overallScore = (pitchScore + distanceScore) / 2;
-            const status = overallScore >= 75 ? "good" : overallScore >= 50 ? "warning" : "poor";
-            
-            const dashboardData: DashboardData = {
-              posture_score: {
-                overall: Math.round(overallScore),
-                neck: Math.round(pitchScore),
-                distance: Math.round(distanceScore),
-                status: status
-              },
-              blink_detection: {
-                blink_detected: false,
-                blink_count: 0,
-                blink_rate: 0,
-                ear_value: data.ear
-              },
-              alert: overallScore < 50 ? "Poor posture detected" : undefined,
-              timestamp: Date.now() / 1000,
-              pitch_angle: data.pitch,
-              distance: data.distance,
-              ear_value: data.ear
-            };
-            
-            setDashboardData(dashboardData);
-            setLastUpdate(new Date());
-          } else {
-            console.warn("Failed to fetch metrics:", response.status);
-          }
-        } catch (err) {
-          console.error("Error polling metrics:", err);
+    // Check calibration status from backend
+    const checkCalibration = async () => {
+      try {
+        const response = await fetch(`${API_URL}/calibration/status/${storedUserId}`);
+        if (response.ok) {
+          const data = await response.json();
+          setIsCalibrated(data.calibrated);
+          // Also sync with localStorage
+          localStorage.setItem("is_calibrated", data.calibrated ? "true" : "false");
+        } else {
+          // Fallback to localStorage
+          const calibrated = localStorage.getItem("is_calibrated") === "true";
+          setIsCalibrated(calibrated);
         }
-      }, 1000); // Poll every 1 second
-    } else {
-      // Clear polling when not monitoring
-      if (pollingIntervalRef.current) {
-        console.log("Stopping metrics polling...");
-        clearInterval(pollingIntervalRef.current);
-        pollingIntervalRef.current = null;
-      }
-    }
-
-    return () => {
-      if (pollingIntervalRef.current) {
-        clearInterval(pollingIntervalRef.current);
+      } catch (err) {
+        console.error("Failed to check calibration status:", err);
+        // Fallback to localStorage
+        const calibrated = localStorage.getItem("is_calibrated") === "true";
+        setIsCalibrated(calibrated);
       }
     };
-  }, [isMonitoring]);
 
-  // Handle data updates (kept for compatibility, but now using polling)
-  const handleDataUpdate = (data: DashboardData) => {
+    if (storedUserId) {
+      checkCalibration();
+    }
+  }, []);
+
+  // Handle data updates from WebSocket - useCallback to prevent re-renders
+  const handleDataUpdate = useCallback((data: DashboardData) => {
     console.log("Dashboard data update:", data);
     setDashboardData(data);
     setLastUpdate(new Date());
-  };
+    
+    // Track session data for report
+    if (isMonitoring) {
+      sessionDataRef.current.push(data);
+      
+      // Count alerts
+      if (data.alert) {
+        alertCountRef.current += 1;
+      }
+    }
+  }, [isMonitoring]);
+
+  // Handle camera errors - useCallback to prevent re-renders
+  const handleCameraError = useCallback((error: string) => {
+    console.error("Camera error:", error);
+    setCameraError(error);
+  }, []);
 
   // Calculate session duration
   const getSessionDuration = () => {
@@ -153,12 +144,69 @@ export default function SimplifiedPosturePage() {
     setIsMonitoring(true);
     setSessionStartTime(new Date());
     setDashboardData(null); // Reset data
+    sessionDataRef.current = []; // Reset session data
+    alertCountRef.current = 0; // Reset alert count
   };
 
-  // Stop monitoring session
+  // Stop monitoring session and generate report
   const stopMonitoring = () => {
     setIsMonitoring(false);
-    setDashboardData(null);
+    
+    // Calculate session statistics
+    if (sessionDataRef.current.length > 0 && sessionStartTime) {
+      const sessionData = sessionDataRef.current;
+      const endTime = new Date();
+      const durationSeconds = Math.floor((endTime.getTime() - sessionStartTime.getTime()) / 1000);
+      
+      // Calculate averages
+      const avgPostureScore = sessionData.reduce((sum, d) => sum + d.posture_score.overall, 0) / sessionData.length;
+      const avgNeckScore = sessionData.reduce((sum, d) => sum + d.posture_score.neck, 0) / sessionData.length;
+      const avgRollScore = sessionData.reduce((sum, d) => sum + d.posture_score.roll, 0) / sessionData.length;
+      const avgDistanceScore = sessionData.reduce((sum, d) => sum + d.posture_score.distance, 0) / sessionData.length;
+      const avgBlinkRate = sessionData.reduce((sum, d) => sum + d.blink_detection.blink_rate, 0) / sessionData.length;
+      const totalBlinks = sessionData[sessionData.length - 1]?.blink_detection.blink_count || 0;
+      
+      // Calculate posture quality time
+      let goodPostureTime = 0;
+      let poorPostureTime = 0;
+      sessionData.forEach(d => {
+        if (d.posture_score.overall >= 80) {
+          goodPostureTime += 1; // Each data point represents ~1 second
+        } else if (d.posture_score.overall < 60) {
+          poorPostureTime += 1;
+        }
+      });
+      
+      // Find min and max scores
+      const maxPostureScore = Math.max(...sessionData.map(d => d.posture_score.overall));
+      const minPostureScore = Math.min(...sessionData.map(d => d.posture_score.overall));
+      
+      const stats: SessionStats = {
+        duration: durationSeconds,
+        avgPostureScore,
+        avgNeckScore,
+        avgRollScore,
+        avgDistanceScore,
+        totalBlinks,
+        avgBlinkRate,
+        alertsCount: alertCountRef.current,
+        poorPostureTime,
+        goodPostureTime,
+        maxPostureScore,
+        minPostureScore,
+        startTime: sessionStartTime.toISOString(),
+        endTime: endTime.toISOString(),
+      };
+      
+      // Store stats in localStorage
+      localStorage.setItem("session_stats", JSON.stringify(stats));
+      
+      // Navigate to report page
+      router.push("/dashboard/report");
+    } else {
+      // No data collected, just stop
+      setDashboardData(null);
+    }
   };
 
   if (!userId) {
@@ -210,25 +258,25 @@ export default function SimplifiedPosturePage() {
               {isMonitoring && lastUpdate && (
                 <span className="ml-auto text-xs text-green-600 flex items-center gap-1">
                   <span className="w-2 h-2 bg-green-600 rounded-full animate-pulse"></span>
-                  Connected
+                  Active
                 </span>
               )}
             </h2>
             
             {isMonitoring ? (
               <div className="relative">
-                {/* Backend video stream with OpenCV processing - includes user_id for calibrated thresholds */}
-                <img 
-                  src={`${API_URL}/video/stream?user_id=${userId}`}
-                  alt="Posture Monitoring Stream"
-                  className="w-full h-auto rounded-lg"
-                  onError={(e) => {
-                    console.error("Video stream error:", e);
-                  }}
-                  onLoad={() => {
-                    console.log("Video stream loaded successfully");
-                  }}
+                {/* WebSocket-based video capture using client camera */}
+                <VideoCapture
+                  userId={userId}
+                  onDataUpdate={handleDataUpdate}
+                  isActive={isMonitoring}
+                  onCameraError={handleCameraError}
                 />
+                {cameraError && (
+                  <div className="mt-3 p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-800">
+                    ⚠️ {cameraError}
+                  </div>
+                )}
               </div>
             ) : (
               <div className="flex flex-col items-center justify-center h-96 bg-gray-50 rounded-xl border-2 border-dashed border-gray-300">
@@ -237,7 +285,14 @@ export default function SimplifiedPosturePage() {
                     <Activity className="w-10 h-10 text-blue-600" />
                   </div>
                   <h3 className="text-lg font-semibold text-gray-900 mb-2">Ready to Monitor</h3>
-                  <p className="text-gray-600 mb-4">Click the button below to start tracking your posture</p>
+                  <p className="text-gray-600 mb-4">
+                    Click the button below to start tracking your posture using your webcam
+                  </p>
+                  {!isCalibrated && (
+                    <p className="text-sm text-yellow-600 mb-4">
+                      💡 Tip: Calibrate first for more accurate results
+                    </p>
+                  )}
                   <button
                     onClick={startMonitoring}
                     className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium shadow-md"
@@ -318,15 +373,42 @@ export default function SimplifiedPosturePage() {
                   <div className="space-y-3">
                     <div className="flex items-center justify-between">
                       <span className="text-gray-600">Neck Angle</span>
-                      <span className="font-semibold">
-                        {dashboardData.posture_score.neck.toFixed(0)}%
-                      </span>
+                      <div className="text-right">
+                        <span className="font-semibold">
+                          {dashboardData.posture_score.neck.toFixed(0)}%
+                        </span>
+                        {dashboardData.pitch_angle !== undefined && (
+                          <span className="text-xs text-gray-500 ml-2">
+                            ({dashboardData.pitch_angle.toFixed(1)}°)
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-gray-600">Head Tilt</span>
+                      <div className="text-right">
+                        <span className="font-semibold">
+                          {dashboardData.posture_score.roll.toFixed(0)}%
+                        </span>
+                        {dashboardData.roll_angle !== undefined && (
+                          <span className="text-xs text-gray-500 ml-2">
+                            ({Math.abs(dashboardData.roll_angle).toFixed(1)}°)
+                          </span>
+                        )}
+                      </div>
                     </div>
                     <div className="flex items-center justify-between">
                       <span className="text-gray-600">Distance</span>
-                      <span className="font-semibold">
-                        {dashboardData.posture_score.distance.toFixed(0)}%
-                      </span>
+                      <div className="text-right">
+                        <span className="font-semibold">
+                          {dashboardData.posture_score.distance.toFixed(0)}%
+                        </span>
+                        {dashboardData.distance !== undefined && (
+                          <span className="text-xs text-gray-500 ml-2">
+                            ({dashboardData.distance.toFixed(0)}cm)
+                          </span>
+                        )}
+                      </div>
                     </div>
                   </div>
                 </div>

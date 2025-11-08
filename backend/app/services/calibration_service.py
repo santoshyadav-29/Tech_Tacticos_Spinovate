@@ -23,6 +23,7 @@ class CalibrationService:
         user_id: str, 
         scenario: str, 
         pitch_angle: Optional[float] = None,
+        roll_angle: Optional[float] = None,
         distance: Optional[float] = None,
         ear: Optional[float] = None
     ) -> Dict:
@@ -32,7 +33,8 @@ class CalibrationService:
         Args:
             user_id: Unique identifier for the user
             scenario: Type of posture scenario (good_posture, neutral, looking_down)
-            pitch_angle: Head pitch angle in degrees
+            pitch_angle: Head pitch angle in degrees (up/down)
+            roll_angle: Head roll angle in degrees (side-to-side tilt)
             distance: Distance from camera in cm
             ear: Eye Aspect Ratio
             
@@ -48,6 +50,7 @@ class CalibrationService:
             user_id=user_id,
             scenario=scenario,
             pitch_angle=pitch_angle,
+            roll_angle=roll_angle,
             distance=distance,
             ear=ear,
             timestamp=datetime.now()
@@ -89,7 +92,7 @@ class CalibrationService:
         
         good_posture = scenarios["good_posture"]
         
-        print(f"CALCULATING THRESHOLDS: good_posture.pitch_angle={good_posture.pitch_angle}, good_posture.distance={good_posture.distance}")
+        print(f"CALCULATING THRESHOLDS: good_posture.pitch_angle={good_posture.pitch_angle}, good_posture.roll_angle={good_posture.roll_angle}, good_posture.distance={good_posture.distance}")
         
         # Calculate pitch threshold
         if good_posture.pitch_angle is not None:
@@ -108,11 +111,23 @@ class CalibrationService:
         else:
             print(f"WARNING: good_posture.pitch_angle is None, using default threshold")
         
+        # Calculate roll threshold (side-to-side tilt)
+        if good_posture.roll_angle is not None:
+            # Good posture should have minimal roll (head upright)
+            # Set threshold based on deviation from neutral
+            base_roll = abs(good_posture.roll_angle)
+            # Allow 10 degrees of tilt from good posture (more sensitive than before)
+            user_data.roll_threshold = max(base_roll + 10.0, 10.0)
+            
+            print(f"ROLL THRESHOLD CALC: base_roll={base_roll}, threshold={user_data.roll_threshold}")
+        else:
+            print(f"WARNING: good_posture.roll_angle is None, using default threshold")
+        
         # Calculate distance thresholds
         if good_posture.distance is not None:
             # Set distance range around the good posture distance
             base_distance = good_posture.distance
-            tolerance = 10.0  # cm
+            tolerance = 5.0  # cm
             user_data.distance_min = max(base_distance - tolerance, 30.0)
             user_data.distance_max = min(base_distance + tolerance, 80.0)
         

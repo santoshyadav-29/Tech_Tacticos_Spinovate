@@ -27,58 +27,100 @@ class WebSocketVideoProcessor:
     
     def calculate_posture_score(
         self, 
-        pitch_angle: Optional[float], 
+        pitch_angle: Optional[float],
+        roll_angle: Optional[float],
         distance: Optional[float],
         thresholds: UserThresholds
     ) -> PostureScore:
         """
         Calculate posture scores based on angles and thresholds.
         
+        NEW BEHAVIOR: Only show negative scores when thresholds are EXCEEDED.
+        Within threshold = 100 (perfect), exceeding threshold = declining score.
+        
         Returns scores from 0-100 where 100 is perfect posture.
         """
         neck_score = 100.0
+        roll_score = 100.0
         distance_score = 100.0
         
         # Calculate neck score based on pitch angle
         if pitch_angle is not None:
             pitch_deviation = abs(pitch_angle)
             print(f"DEBUG Neck: pitch_angle={pitch_angle}, deviation={pitch_deviation}, threshold={thresholds.pitch_threshold}")
-            if pitch_deviation > thresholds.pitch_threshold:
-                # Score decreases as deviation increases
-                neck_score = max(0, 100 - (pitch_deviation / thresholds.pitch_threshold * 100))
+            
+            if pitch_deviation <= thresholds.pitch_threshold:
+                # Within threshold = perfect score (100)
+                neck_score = 100.0
             else:
-                # Good posture gets full or near-full score
-                neck_score = 100 - (pitch_deviation / thresholds.pitch_threshold * 20)
+                # Exceeding threshold = score decreases proportionally
+                # Score drops from 100 to 0 as deviation increases beyond threshold
+                excess = pitch_deviation - thresholds.pitch_threshold
+                # Allow some grace: score drops to 0 when deviation is 2x the threshold
+                max_excess = thresholds.pitch_threshold  # Same as threshold value
+                penalty = min(100, (excess / max_excess) * 100)
+                neck_score = max(0, 100 - penalty)
         else:
             print(f"DEBUG Neck: pitch_angle is None!")
+        
+        # Calculate roll score (side-to-side tilt)
+        if roll_angle is not None:
+            roll_deviation = abs(roll_angle)
+            print(f"DEBUG Roll: roll_angle={roll_angle}, deviation={roll_deviation}, threshold={thresholds.roll_threshold}")
+            
+            if roll_deviation <= thresholds.roll_threshold:
+                # Within threshold = perfect score (100)
+                roll_score = 100.0
+            else:
+                # Exceeding threshold = score decreases proportionally
+                excess = roll_deviation - thresholds.roll_threshold
+                max_excess = thresholds.roll_threshold
+                penalty = min(100, (excess / max_excess) * 100)
+                roll_score = max(0, 100 - penalty)
+        else:
+            print(f"DEBUG Roll: roll_angle is None!")
         
         # Calculate distance score
         if distance is not None:
             if thresholds.distance_min <= distance <= thresholds.distance_max:
-                # Perfect distance
+                # Within threshold range = perfect distance
                 distance_score = 100.0
             elif distance < thresholds.distance_min:
-                # Too close
-                distance_score = max(0, (distance / thresholds.distance_min) * 100)
+                # Too close - score decreases as you get closer
+                # Allow grace: score drops to 0 at 50% of min distance
+                min_acceptable = thresholds.distance_min * 0.5
+                if distance <= min_acceptable:
+                    distance_score = 0.0
+                else:
+                    # Linear interpolation between min_acceptable and distance_min
+                    distance_score = ((distance - min_acceptable) / 
+                                    (thresholds.distance_min - min_acceptable)) * 100
             else:
-                # Too far
-                excess = distance - thresholds.distance_max
-                distance_score = max(0, 100 - (excess / 20) * 50)
+                # Too far - score decreases as you get farther
+                # Allow grace: score drops to 0 at 1.5x max distance
+                max_acceptable = thresholds.distance_max * 1.5
+                if distance >= max_acceptable:
+                    distance_score = 0.0
+                else:
+                    # Linear interpolation between distance_max and max_acceptable
+                    distance_score = 100 - (((distance - thresholds.distance_max) / 
+                                            (max_acceptable - thresholds.distance_max)) * 100)
         
-        # Overall score is average of components
-        overall_score = (neck_score + distance_score) / 2
+        # Overall score is average of ALL components including roll
+        overall_score = (neck_score + roll_score + distance_score) / 3
         
-        # Determine status
-        if overall_score >= 75:
-            status = "good"
-        elif overall_score >= 50:
-            status = "warning"
+        # Determine status based on calibrated behavior
+        if overall_score >= 90:
+            status = "good"  # Within calibrated thresholds
+        elif overall_score >= 60:
+            status = "warning"  # Slightly exceeding thresholds
         else:
-            status = "poor"
+            status = "poor"  # Significantly exceeding thresholds
         
         return PostureScore(
             overall=round(overall_score, 1),
             neck=round(neck_score, 1),
+            roll=round(roll_score, 1),
             distance=round(distance_score, 1),
             status=status
         )
@@ -118,15 +160,21 @@ class WebSocketVideoProcessor:
             # Get user thresholds
             thresholds = calibration_service.get_user_thresholds(user_id)
             
+            # Log calibration status
+            if not thresholds.calibrated:
+                print(f"WARNING: User {user_id} is not calibrated. Using default thresholds.")
+            else:
+                print(f"Using calibrated thresholds for user {user_id}: pitch={thresholds.pitch_threshold}, distance_min={thresholds.distance_min}, distance_max={thresholds.distance_max}")
+            
             # Process with drowsiness detection service
             result = self.drowsiness_service.process_frame(rgb_image, frame)
             
             if result[0] is None:  # No face detected
                 return None
             
-            pitch_angle, ear, mar, yaw_angle, drowsiness_detected, yawn_detected, blink_detected, posture_angles = result
+            pitch_angle, ear, mar, yaw_angle, roll_angle, drowsiness_detected, yawn_detected, blink_detected, posture_angles = result
             
-            print(f"DEBUG: pitch_angle from service = {pitch_angle}, type = {type(pitch_angle)}")
+            print(f"DEBUG: pitch_angle={pitch_angle}, roll_angle={roll_angle}")
             
             # Update blink tracking
             if blink_detected:
@@ -139,10 +187,10 @@ class WebSocketVideoProcessor:
             # Debug logging for distance issues
             print(f"Distance: {distance} cm, Thresholds: min={thresholds.distance_min}, max={thresholds.distance_max}")
             
-            # Calculate posture score
-            posture_score = self.calculate_posture_score(pitch_angle, distance, thresholds)
+            # Calculate posture score including roll (head tilt)
+            posture_score = self.calculate_posture_score(pitch_angle, roll_angle, distance, thresholds)
             
-            print(f"Posture Score - Overall: {posture_score.overall}, Neck: {posture_score.neck}, Distance: {posture_score.distance}")
+            print(f"Posture Score - Overall: {posture_score.overall}, Neck: {posture_score.neck}, Roll: {posture_score.roll}, Distance: {posture_score.distance}")
             
             # Create blink detection data
             blink_rate = self.calculate_blink_rate()
@@ -172,6 +220,7 @@ class WebSocketVideoProcessor:
                 posture_angles=posture_angles,
                 # Include raw metrics for calibration
                 pitch_angle=pitch_angle,
+                roll_angle=roll_angle,
                 distance=distance,
                 ear_value=ear
             )

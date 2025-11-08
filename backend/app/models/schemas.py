@@ -53,6 +53,7 @@ class CalibrationData(BaseModel):
     user_id: str
     scenario: str  # e.g., 'good_posture', 'neutral', 'looking_down'
     pitch_angle: Optional[float] = None
+    roll_angle: Optional[float] = None  # NEW: Side-to-side head tilt
     distance: Optional[float] = None
     ear: Optional[float] = None
     timestamp: datetime = datetime.now()
@@ -60,6 +61,7 @@ class CalibrationData(BaseModel):
 class UserThresholds(BaseModel):
     user_id: str
     pitch_threshold: float = 15.0
+    roll_threshold: float = 10.0  # Max acceptable head tilt (degrees) - more sensitive
     distance_min: float = 40.0
     distance_max: float = 60.0
     ear_threshold: float = 0.23
@@ -70,7 +72,8 @@ class UserThresholds(BaseModel):
 # Minimal Dashboard Models
 class PostureScore(BaseModel):
     overall: float  # 0-100
-    neck: float
+    neck: float  # Pitch score (up/down)
+    roll: float  # NEW: Roll score (side-to-side tilt)
     distance: float
     status: str  # 'good', 'warning', 'poor'
 
@@ -88,6 +91,7 @@ class MinimalDashboardResponse(BaseModel):
     posture_angles: Optional[dict] = None
     # Raw metrics for calibration
     pitch_angle: Optional[float] = None
+    roll_angle: Optional[float] = None
     distance: Optional[float] = None
     ear_value: Optional[float] = None
 

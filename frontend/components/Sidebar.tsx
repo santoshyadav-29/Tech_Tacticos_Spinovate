@@ -11,6 +11,7 @@ import {
   FiBookOpen,
   FiBell,
   FiSettings,
+  FiBarChart2,
 } from "react-icons/fi";
 import Link from "next/link";
 
@@ -18,6 +19,7 @@ const sidebarLinks = [
   { name: "Dashboard", href: "/dashboard", icon: <FiHome /> },
   { name: "Scan", href: "/dashboard/posture", icon: <FiCamera /> },
   { name: "Simple Monitor", href: "/dashboard/posture-simple", icon: <FiActivity /> },
+  { name: "Session Report", href: "/dashboard/report", icon: <FiBarChart2 /> },
   { name: "Calibration", href: "/dashboard/calibration", icon: <FiSettings /> },
   { name: "Exercise", href: "/dashboard/excercise", icon: <FiActivity /> },
   { name: "Guide", href: "/dashboard/guide", icon: <FiBookOpen /> },

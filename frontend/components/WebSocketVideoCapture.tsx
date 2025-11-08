@@ -5,6 +5,7 @@ import React, { useState, useRef, useEffect, useCallback } from "react";
 interface PostureScore {
   overall: number;
   neck: number;
+  roll: number;
   distance: number;
   status: string;
 }
@@ -24,6 +25,7 @@ interface DashboardData {
   posture_angles?: Record<string, number>;
   // Raw metrics for calibration
   pitch_angle?: number;
+  roll_angle?: number;
   distance?: number;
   ear_value?: number;
 }
@@ -296,7 +298,10 @@ export const VideoCapture: React.FC<Props> = ({ userId, onDataUpdate, isActive =
       stopWebcam();
       disconnectWebSocket();
     }
-  }, [isActive, startWebcam, stopWebcam, connectWebSocket, disconnectWebSocket]);
+    // Only depend on isActive to prevent infinite loops
+    // The functions are stable due to useCallback
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isActive]);
 
   // Cleanup on unmount
   useEffect(() => {

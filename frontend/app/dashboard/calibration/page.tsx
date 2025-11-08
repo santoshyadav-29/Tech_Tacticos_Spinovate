@@ -85,12 +85,36 @@ export default function CalibrationPage() {
     // Initialize webcam immediately when page loads
     initializeWebcam();
 
+    // Handle page visibility changes (tab switching, minimizing)
+    const handleVisibilityChange = () => {
+      if (document.hidden) {
+        // Stop webcam when page is hidden
+        stopWebcam();
+      } else if (!isComplete && !error) {
+        // Restart webcam when page becomes visible again
+        initializeWebcam();
+      }
+    };
+
+    // Handle browser navigation/refresh
+    const handleBeforeUnload = () => {
+      stopWebcam();
+      if (wsRef.current) {
+        wsRef.current.close();
+      }
+    };
+
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    window.addEventListener("beforeunload", handleBeforeUnload);
+
     return () => {
       // Cleanup: Stop webcam if active
       stopWebcam();
       if (wsRef.current) {
         wsRef.current.close();
       }
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+      window.removeEventListener("beforeunload", handleBeforeUnload);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -148,6 +172,7 @@ export default function CalibrationPage() {
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify({
                 pitch_angle: data.pitch_angle || data.posture_angles?.["Degree of Anteversion of Cervical Spine (y1)"],
+                roll_angle: data.roll_angle, // NEW: Head tilt side-to-side
                 distance: data.distance, // Use actual distance value from backend
                 ear: data.ear_value || data.blink_detection.ear_value,
               }),
@@ -213,6 +238,10 @@ export default function CalibrationPage() {
         method: "POST",
       });
       localStorage.setItem("is_calibrated", "true");
+      
+      // Stop the webcam immediately after calibration completes
+      stopWebcam();
+      
       setIsComplete(true);
     } catch (err) {
       setError("Failed to complete calibration");
@@ -220,6 +249,13 @@ export default function CalibrationPage() {
   };
 
   const currentScenario = scenarios[currentScenarioIndex];
+
+  // Stop webcam when error occurs
+  useEffect(() => {
+    if (error) {
+      stopWebcam();
+    }
+  }, [error]);
 
   if (error) {
     return (
